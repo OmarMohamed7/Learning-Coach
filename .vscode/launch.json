@@ -1,0 +1,52 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "python": "${workspaceFolder}/learning_coach/.venv/bin/python",
+            "envFile": "${workspaceFolder}/learning_coach/.env",
+            "cwd": "${workspaceFolder}/learning_coach",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: main.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/learning_coach/main.py",
+            "python": "${workspaceFolder}/learning_coach/.venv/bin/python",
+            "envFile": "${workspaceFolder}/learning_coach/.env",
+            "cwd": "${workspaceFolder}/learning_coach",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Debug Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "${workspaceFolder}/learning_coach/tests",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/learning_coach/.venv/bin/python",
+            "envFile": "${workspaceFolder}/learning_coach/.env",
+            "cwd": "${workspaceFolder}/learning_coach",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: MCP Filesystem Server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/mcp_servers/filesystem_server.py",
+            "python": "${workspaceFolder}/mcp_servers/.venv/bin/python",
+            "cwd": "${workspaceFolder}/mcp_servers",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}
