@@ -1,0 +1,22 @@
+services:
+  file-server-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/file_server_mcp/Dockerfile
+    container_name: file-server-mcp
+    volumes:
+      - ./learning_coach/study_materials/sample_notes:/app/study_materials/sample_notes
+
+    ports:
+      - 8001:8001
+    restart: unless-stopped
+
+  memory-server-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/memory_server_mcp/Dockerfile
+    container_name: memory-server-mcp
+    ports:
+      - 8002:8002
+
+    restart: unless-stopped
