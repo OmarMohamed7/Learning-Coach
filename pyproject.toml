@@ -1,0 +1,11 @@
+[project]
+name = "learning-coach-gen-ai"
+version = "0.1.0"
+description = "Workspace root for the learning coach app and its MCP servers"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["learning_coach", "mcp_servers", "logger_lib"]
+
+[tool.uv]
+package = false

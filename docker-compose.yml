@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: mcp_servers/file_server_mcp/Dockerfile
     container_name: file-server-mcp
+    image: mcp/file-server:v1.0.0
     volumes:
       - ./learning_coach/study_materials/sample_notes:/app/study_materials/sample_notes
 
@@ -16,6 +17,7 @@ services:
       context: .
       dockerfile: mcp_servers/memory_server_mcp/Dockerfile
     container_name: memory-server-mcp
+    image: mcp/memory-server:v1.0.0
     ports:
       - 8002:8002
 

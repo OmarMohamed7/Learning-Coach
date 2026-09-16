@@ -26,7 +26,7 @@ MCP_SERVERS: dict[str, dict] = {
 
 def build_mcp_client() -> MultiServerMCPClient:
     """Build a client wired to every configured MCP server."""
-    return MultiServerMCPClient(MCP_SERVERS)
+    return MultiServerMCPClient(MCP_SERVERS) # type: ignore
 
 
 async def get_mcp_tools() -> list[BaseTool]:

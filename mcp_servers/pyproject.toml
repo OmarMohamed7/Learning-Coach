@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-logger-lib = { path = "../logger_lib", editable = true }
+logger-lib = { workspace = true }
 
 [tool.uv]
 package = false

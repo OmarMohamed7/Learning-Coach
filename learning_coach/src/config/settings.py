@@ -46,7 +46,9 @@ class Settings(BaseModel):
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
 
     @classmethod
-    def from_env(cls, env_file: str | Path = ".env") -> "Settings":
+    def from_env(cls, env_file: str | Path | None = None) -> "Settings":
+        if env_file is None:
+            env_file = Path(__file__).resolve().parents[2] / ".env"
         load_dotenv(env_file, override=False)
 
         return cls(

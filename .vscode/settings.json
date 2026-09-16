@@ -1,8 +1,7 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/learning_coach/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "python.analysis.extraPaths": [
         "${workspaceFolder}/mcp_servers",
-        "${workspaceFolder}/mcp_servers/.venv/lib/python3.12/site-packages",
         "${workspaceFolder}/logger_lib"
     ]
 }
