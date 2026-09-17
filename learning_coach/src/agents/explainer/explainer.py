@@ -110,7 +110,7 @@ def explainer_node(state: dict) -> dict:
   final_res = None
   
   for iteration in range(max_iteration):
-    logger.info(f'[Explaainer] LLM Call {iteration+1} / {max_iteration}')
+    logger.info(f'[Explainer] LLM Call {iteration+1} / {max_iteration}')
     
     res = llm.invoke(messages)
     messages.append(res)
