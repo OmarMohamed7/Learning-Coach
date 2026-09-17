@@ -59,9 +59,41 @@ class QuizResult:
     score: float       # 0.0 to 1.0
     weak_areas: list[str]
     timestamp: str = ""
+    
+    def to_dict(self) -> dict:
+        return {
+            "topic": self.topic,
+            "score": self.score,
+            "weak_areas": self.weak_areas,
+            "timestamp": self.timestamp,
+            "questions": [q.to_dict() for q in self.questions],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "QuizResult":
+        """
+        Reconstruct from a plain dict.
+
+        Called when LangGraph deserializes quiz_results from a SQLite
+        checkpoint as raw dicts (msgpack round-trip). This happens when
+        resuming a crashed or interrupted session.
+        """
+        return cls(
+            topic=data.get("topic", ""),
+            questions=[],           # Questions not needed for coaching logic
+            score=float(data.get("score", 0.0)),
+            weak_areas=data.get("weak_areas", []),
+            timestamp=data.get("timestamp", ""),
+        )
 
     def passed(self) -> bool:
+        """A score of 0.5 or above is considered a pass."""
         return self.score >= 0.5
+
+    def strong_pass(self) -> bool:
+        """A score of 0.75 or above, ready to move to next topic."""
+        return self.score >= 0.75
+
     
     
 class AgentState(TypedDict):
@@ -128,3 +160,16 @@ def session_is_complete(state:dict) -> bool:
     
     idx = state.get("current_topic_index", 0)
     return idx >= len(roadmap.topics)
+
+def get_latest_quiz_result(state:dict) -> QuizResult | None:
+    
+    res = state.get("quiz_results", [])
+    if not res:
+        return None
+    
+    latest = res[-1]
+    
+    if isinstance(latest , dict):
+        return QuizResult.from_dict(latest)
+    
+    return latest
