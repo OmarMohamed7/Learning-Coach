@@ -5,6 +5,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.curriculum_planner.curriculum_planner_llm import MODEL_NAME, PLANNER_SYSTEM_PROMPT, build_planner_llm
 from graph.state import StudyRoadmap, Topic
+
+from logger import get_logger
+
+logger = get_logger(__name__)
     
 def parse_roadmap_json(json_string: str) -> StudyRoadmap:
     
@@ -59,7 +63,7 @@ def curriculum_planner_node(state: dict) -> dict:
     if not goal:
         return {"error" : "No learning goal provided"}
     
-    print(f"\n[Curriculum Planner] Building roadmap for: '{goal}'")
+    logger.info(f"\n[Curriculum Planner] Building roadmap for: '{goal}'")
 
     llm = build_planner_llm()
     messages = [
@@ -67,19 +71,19 @@ def curriculum_planner_node(state: dict) -> dict:
         HumanMessage(content=f"Create a study roadmap for: {goal}")
     ]
     
-    print(f"[Curriculum Planner] Calling {MODEL_NAME}...")
+    logger.info(f"[Curriculum Planner] Calling {MODEL_NAME}...")
     response = llm.invoke(messages)
     
     try:
         roadmap = parse_roadmap_json(response.content) # type: ignore
     except ValueError as e:
-        print(f"[Curriculum Planner] Parse error: {e}")
+        logger.error(f"[Curriculum Planner] Parse error: {e}")
         return {
             "error": str(e),
             "messages": messages + [response],
         }
 
-    print(f"[Curriculum Planner] Created {len(roadmap.topics)} topics")
+    logger.info(f"[Curriculum Planner] Created {len(roadmap.topics)} topics")
     
 
     return {
