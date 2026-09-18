@@ -16,6 +16,8 @@ ORCHESTRATION LAYER (LangGraph workflow)
 SQLite checkpoint store                          OBSERVABILITY LAYER (Langfuse)
 ```
 
+![LangGraph workflow](learning_coach/graph_structure.png)
+
 The orchestration layer reads notes and session context, and writes progress, through the **tool layer**; the Quiz Generator node also delegates over **A2A** to standalone agent services; every node fans in to a local **inference layer**.
 
 ### Orchestration layer — LangGraph workflow
