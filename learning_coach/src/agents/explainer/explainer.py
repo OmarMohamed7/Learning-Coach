@@ -45,12 +45,12 @@ After writing the explanation, store what you explained:
   memory_set(session_id, 'explained_topics', <comma-separated topic titles>)
 """
 
-def execute_tool_call(tool_call: dict, tools: dict) -> str:
+async def execute_tool_call(tool_call: dict, tools: dict) -> str:
   """ Execute a tool call and return the result as a string. Never raises."""
 
   name = tool_call['name']
   args = tool_call['args']
-  
+
   if name not in tools.keys():
     return f"Error: unkown tool `{name}`"
 
@@ -69,17 +69,17 @@ def execute_tool_call(tool_call: dict, tools: dict) -> str:
     )
 
   try:
-    res = tools[name].invoke(args)
+    res = await tools[name].ainvoke(args)
     if isinstance(res, (list,dict)):
       return json.dumps(res)
-    
+
     return str(res)
-    
+
   except Exception as e:
     return f"Error executing {name}({args}): {type(e).__name__}: {e}"
 
 
-def explainer_node(state: dict) -> dict:
+async def explainer_node(state: dict) -> dict:
   
   """
   Langgraph node: Explainer Agent
@@ -120,18 +120,18 @@ def explainer_node(state: dict) -> dict:
   for iteration in range(max_iteration):
     logger.info(f'[Explainer] LLM Call {iteration+1} / {max_iteration}')
     
-    res = llm.invoke(messages)
+    res = await llm.ainvoke(messages)
     messages.append(res)
-    
+
     if not res.tool_calls:
       final_res = res
       logger.info(f"[Explainer] Complete after {iteration + 1} LLM call(s)")
       break
-    
+
     logger.info(f"[Explainer] {len(res.tool_calls)} tool call(s) requested:")
     for tool_call in res.tool_calls:
       logger.info(f" -> {tool_call['name']}({tool_call['args']})")
-      result = execute_tool_call(tool_call, tools) # type: ignore
+      result = await execute_tool_call(tool_call, tools) # type: ignore
       
       log_result = result[:100] + "..." if len(result) > 100 else result
       logger.info(f"    ← {log_result}")
@@ -144,11 +144,31 @@ def explainer_node(state: dict) -> dict:
       )
     
   if final_res is None:
-    return {
-        "messages": messages,
-        "error": f"Explainer reached max iterations ({max_iteration}).",
-    }
-    
+    logger.error(
+        f"[Explainer] Reached max iterations ({max_iteration}) without a final "
+        f"explanation — likely no study materials matched '{topic.title}'. "
+        "Falling back to a general explanation and continuing to the quiz."
+    )
+    # TODO(no-materials fallback): instead of this inline description string,
+    # have the LLM generate a full explanation from its own knowledge (no tool
+    # calls / no grounding in notes required) and:
+    #   1. Write it to disk as a new study-material file, e.g.
+    #      f"{state['study_materials_path']}/{topic.title.lower().replace(' ', '_')}.md"
+    #      via a `write_study_file`-style MCP tool (mirror read_study_file /
+    #      list_study_files on the filesystem MCP server; add one if missing).
+    #      This makes the topic self-healing: next time it's explained,
+    #      list_study_files()/search_notes() will find it and ground normally.
+    #   2. Use that generated explanation as the fallback content below instead
+    #      of `topic.description`.
+    # Keep returning {"error": None} so routing still continues to quiz_generator.
+    fallback = (
+        f"I couldn't find study materials covering '{topic.title}' in your notes, "
+        "so here's a general explanation instead:\n\n"
+        f"{topic.description}"
+    )
+    messages.append(SystemMessage(content=fallback))
+    return {"messages": messages, "error": None}
+
   logger.info(f"[Explainer] Explaination: {len(final_res.content)} characters")
 
   logger.info(f"\n{'='*60}")

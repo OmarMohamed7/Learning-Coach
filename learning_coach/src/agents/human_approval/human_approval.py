@@ -56,16 +56,19 @@ def human_approval_node(state: dict) -> dict:
     else:
         logger.info("[Human Approval] Roadmap rejected\nRegenrating new one...")
 
+    # After Interruption the next node receives only {"approved":True} 
+    # With no roadmap or any other properties from state
+    # so we return the all state
     return{
-        "approved": approved,
-        "exited": exited,
-        "roadmap":roadmap,
-        "goal": state.get("goal", ""),
-        "session_id":state.get("session_id", ""),
-        "current_topic_index": state.get("current_topic_index", 0),
-        "quiz_results": state.get("quiz_results", []),
-        "weak_areas": state.get("weak_areas", []),
+        "approved":             approved,
+        "exited":               exited,
+        "roadmap":              roadmap,
+        "goal":                 state.get("goal", ""),
+        "session_id":           state.get("session_id", ""),
+        "current_topic_index":  state.get("current_topic_index", 0),
+        "quiz_results":         state.get("quiz_results", []),
+        "weak_areas":           state.get("weak_areas", []),
         "study_materials_path": state.get("study_materials_path", "study_materials/sample_notes"),
-        "error": None,
+        "error":                None,
         
     }

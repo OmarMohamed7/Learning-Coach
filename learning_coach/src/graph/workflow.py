@@ -43,7 +43,7 @@ def build_graph() -> StateGraph:
     
     builder.add_conditional_edges("explainer", route_after_explaining, {"quiz_generator": "quiz_generator", END: END})
     builder.add_edge("quiz_generator", "progress_coach")
-    builder.add_conditional_edges("progress_coach", route_after_progress,{"explainer": "explainer", "end": END})
+    builder.add_conditional_edges("progress_coach", route_after_progress,{"explainer": "explainer", END: END})
 
     return builder
 

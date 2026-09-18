@@ -47,6 +47,29 @@
             "cwd": "${workspaceFolder}/mcp_servers",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Python: test_graph.py (prompt for goal)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/learning_coach/scripts/test_graph.py",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "envFile": "${workspaceFolder}/learning_coach/.env",
+            "cwd": "${workspaceFolder}/learning_coach",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--goal",
+                "${input:learningGoal}"
+            ]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "learningGoal",
+            "type": "promptString",
+            "description": "What do you want to learn?",
+            "default": "Learn English"
         }
     ]
 }

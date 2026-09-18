@@ -78,8 +78,8 @@ uv sync
 Pull the local models with Ollama:
 
 ```bash
-ollama pull qwen2.5:7b
-ollama pull qwen2.5-coder:32b
+ollama pull qwen3.8:27b
+ollama pull llama3.1:8b
 ```
 
 Start Ollama (if not already running):

@@ -43,7 +43,7 @@ def get_coaching_message(topic: str, score: float, weak_areas: list[str]) -> dic
             "encouragement": "Every topic builds on the last.",
         }
         
-def progress_coach_node(state: dict) -> dict:
+async def progress_coach_node(state: dict) -> dict:
     """
     LangGraph Node: Progress Coach
     
@@ -91,7 +91,7 @@ def progress_coach_node(state: dict) -> dict:
     tools = {t.name: t for t in mcp_tools}
 
     logger.info("Persist progress to MCP memory")
-    tools["memory_set"].invoke({
+    await tools["memory_set"].ainvoke({
         "session_id": session_id,
         "key": f"progress_topic_{idx}",
         "value": json.dumps({
