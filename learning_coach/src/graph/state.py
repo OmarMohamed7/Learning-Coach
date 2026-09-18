@@ -118,6 +118,7 @@ class AgentState(TypedDict):
     goal: str
     roadmap: StudyRoadmap | None
     approved: bool
+    exited: bool
     current_topic_index: int
     quiz_results: list[QuizResult]
     weak_areas: list[str]
@@ -138,6 +139,7 @@ def initial_state(
         "goal": goal,
         "roadmap": None,
         "approved": False,
+        "exited": False,
         "current_topic_index": 0,
         "quiz_results" : [],
         "weak_areas": [],

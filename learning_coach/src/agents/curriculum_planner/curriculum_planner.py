@@ -3,7 +3,7 @@ import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.curriculum_planner.curriculum_planner_llm import MODEL_NAME, PLANNER_SYSTEM_PROMPT, build_planner_llm
+from agents.curriculum_planner.curriculum_planner_llm import PLANNER_SYSTEM_PROMPT, build_planner_llm # type: ignore
 from graph.state import StudyRoadmap, Topic
 
 from logger import get_logger
@@ -71,7 +71,7 @@ def curriculum_planner_node(state: dict) -> dict:
         HumanMessage(content=f"Create a study roadmap for: {goal}")
     ]
     
-    logger.info(f"[Curriculum Planner] Calling {MODEL_NAME}...")
+    logger.info(f"[Curriculum Planner] Calling {type(llm).__name__}...")
     response = llm.invoke(messages)
     
     try:

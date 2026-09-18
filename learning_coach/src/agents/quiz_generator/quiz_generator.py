@@ -1,18 +1,14 @@
 import json
-import os 
 from datetime import datetime, timezone
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_ollama import ChatOllama
 
+from config.llm_factory import get_llm
 from graph.state import QuizQuestion, QuizResult, get_current_topic
 
 from .quiz_prompts import GENERATION_PROMPT, GRADING_PROMPT
 
 from logger import get_logger
-
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 logger = get_logger(__name__)
 
@@ -20,13 +16,8 @@ logger = get_logger(__name__)
 def generate_questions(topic: str, explanation: str, n: int = 3) -> list[dict]:
     """ Generate n quiz questions from the Explainer's topic """
     
-    llm = ChatOllama(
-        model=MODEL_NAME,
-        base_url=OLLAMA_BASE_URL,
-        temperature=0.4,
-        format='json'
-    )
-    
+    llm = get_llm(temperature=0.4, json_mode=True)
+
     prompt = GENERATION_PROMPT.format(n=n)
     
     messages = [
@@ -53,13 +44,8 @@ def generate_questions(topic: str, explanation: str, n: int = 3) -> list[dict]:
     
 def grade_answer(question: str, expected: str, student_answer: str) -> dict:
     """ Grade a student's answer using the LLM as judge. """
-    llm = ChatOllama(
-        model=MODEL_NAME,
-        base_url=OLLAMA_BASE_URL,
-        temperature=0.1,
-        format='json'
-    )
-    
+    llm = get_llm(temperature=0.1, json_mode=True)
+
     prompt = GRADING_PROMPT.format(
         question= question,
         expected_answer= expected,

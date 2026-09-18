@@ -32,20 +32,18 @@ dependencies = [
     "python-dotenv==1.1.1",
     "tenacity==8.5.0",
     "lancedb==0.29.2",
-    "sqlalchemy", 
+    "sqlalchemy",
     "asyncpg",
     "greenlet",
     "langgraph-checkpoint-postgres",
     "psycopg[binary,pool]",
-    
     # ── Saving Graph Image ───────────────────────────────────────────────────
     "grandalf",
     "grandalf",
-
     # ── Shared logging (local package, also used by mcp_servers) ─────────────
     "logger-lib",
     "langchain-mcp-adapters>=0.3.0",
-    
+    "langchain-anthropic>=1.7.2",
 ]
 
 [tool.uv.sources]

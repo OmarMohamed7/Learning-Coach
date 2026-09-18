@@ -9,8 +9,18 @@ from agents.quiz_generator.quiz_generator import quiz_generator_node
 from graph.state import AgentState, session_is_complete
 
 
+def route_after_planning(state: dict) -> str:
+    return "human_approval" if state.get("roadmap") is not None else END
+
+
 def route_after_approval(state: dict) -> str:
+    if state.get("exited"):
+        return END
     return "explainer" if state.get("approved") else "curriculum_planner"
+
+
+def route_after_explaining(state: dict) -> str:
+    return END if state.get("error") else "quiz_generator"
 
 
 def route_after_progress(state: dict) -> str:
@@ -28,10 +38,10 @@ def build_graph() -> StateGraph:
     builder.add_node("progress_coach",      progress_coach_node) # type: ignore
 
     builder.set_entry_point("curriculum_planner")
-    builder.add_edge("curriculum_planner", "human_approval")
-    builder.add_conditional_edges("human_approval", route_after_approval,{"explainer": "explainer", "curriculum_planner": "curriculum_planner"})
+    builder.add_conditional_edges("curriculum_planner", route_after_planning, {"human_approval": "human_approval", END: END})
+    builder.add_conditional_edges("human_approval", route_after_approval,{"explainer": "explainer", "curriculum_planner": "curriculum_planner", END: END})
     
-    builder.add_edge("explainer", "quiz_generator")
+    builder.add_conditional_edges("explainer", route_after_explaining, {"quiz_generator": "quiz_generator", END: END})
     builder.add_edge("quiz_generator", "progress_coach")
     builder.add_conditional_edges("progress_coach", route_after_progress,{"explainer": "explainer", "end": END})
 

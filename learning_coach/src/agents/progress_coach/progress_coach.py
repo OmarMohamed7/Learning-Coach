@@ -5,18 +5,14 @@ The Progress Coach does three things in sequence:
     3- decide what happens next.
 """
 import json
-import os 
 from datetime import datetime, timezone
 
 from graph.state import get_latest_quiz_result
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_ollama import ChatOllama
+from config.llm_factory import get_llm
 from logger import get_logger
 from mcp_client.client import get_cached_tools
 from .progress_coach_prompt import COACHING_PROMPT
-
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 PASS_THRESHOLD = 0.8
 
@@ -24,12 +20,7 @@ logger = get_logger(__name__)
 
 def get_coaching_message(topic: str, score: float, weak_areas: list[str]) -> dict:
     """Ask the LLM for a personalised coaching message."""
-    llm = ChatOllama(
-        model=MODEL_NAME,
-        base_url=OLLAMA_BASE_URL,
-        temperature=0.4,
-        format="json",
-    )
+    llm = get_llm(temperature=0.4, json_mode=True)
     context = {
         "topic":         topic,
         "score_percent": f"{score:.0%}",

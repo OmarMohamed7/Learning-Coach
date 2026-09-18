@@ -1,11 +1,5 @@
 
-import os
-
-from langchain_ollama import ChatOllama
-
-
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
+from config.llm_factory import get_llm
 
 PLANNER_SYSTEM_PROMPT = """You are an expert curriculum designer.
 
@@ -148,10 +142,5 @@ Return ONLY the final JSON object.
 """
 
 
-def build_planner_llm() -> ChatOllama:
-    return ChatOllama(
-        model=MODEL_NAME,
-        base_url=OLLAMA_BASE_URL,
-        temperature=0.1,
-        format='json'
-    )
+def build_planner_llm():
+    return get_llm(temperature=0.1, json_mode=True)
