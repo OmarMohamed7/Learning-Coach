@@ -32,6 +32,11 @@ dependencies = [
     "python-dotenv==1.1.1",
     "tenacity==8.5.0",
     "lancedb==0.29.2",
+    "sqlalchemy", 
+    "asyncpg",
+    "greenlet",
+    "langgraph-checkpoint-postgres",
+    "psycopg[binary,pool]",
     # ── Shared logging (local package, also used by mcp_servers) ─────────────
     "logger-lib",
     "langchain-mcp-adapters>=0.3.0",

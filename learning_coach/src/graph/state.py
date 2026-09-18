@@ -1,6 +1,11 @@
 
 
-from dataclasses import Field, asdict, dataclass, field
+from dataclasses import asdict, field
+
+from pydantic import BaseModel, Field
+from pydantic.dataclasses import dataclass
+
+
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -33,9 +38,9 @@ class Topic:
 @dataclass
 class StudyRoadmap:
     """ The full study plan produced by the Curriculum Planner. """
-    goal: str = Field(min_length=3, max_length=500) # type: ignore
     total_weeks: int
     topics: list[Topic]
+    goal: str = Field(min_length=3, max_length=500) # type: ignoreß
     weekly_hours: int = 5
     
     def is_complete(self) -> bool:
