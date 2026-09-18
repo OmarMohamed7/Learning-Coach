@@ -25,6 +25,18 @@ ALL_AGENT_NAMES = [
     "progress_coach",
 ]
 
+def export_graph_image():
+    try:
+        png_bytes = app.state.graph.get_graph().draw_mermaid_png()
+        with open("graph_structure.png", "wb") as f:
+            f.write(png_bytes)
+        
+        logger.critical("🤖 Graph visualization successfully saved as 'graph_structure.png'")
+        
+    except Exception as e:
+        logger.error(f"Could not render graph via mermaid: {e}")
+    
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("Hello from Learning Coach!\n")
@@ -61,11 +73,16 @@ async def lifespan(_: FastAPI):
         await checkpointer.setup()  # creates checkpoint tables if they don't exist yet
 
         app.state.graph = compile_graph(checkpointer)
+        
+        # Export graph image
+        export_graph_image()
+        
         logger.info("[Main] Graph compiled with checkpointer.")
 
         yield
 
 app = FastAPI(lifespan=lifespan)
+
     
 if __name__ == "__main__":
     uvicorn.run(app="main:app", host="0.0.0.0", port=8000, reload=True)

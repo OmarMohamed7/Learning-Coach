@@ -21,18 +21,19 @@ def build_graph() -> StateGraph:
     """Assemble the Learning Coach graph. Call `.compile(checkpointer=...)` on the result."""
     builder = StateGraph(AgentState)
 
-    builder.add_node("curriculum_planner", curriculum_planner_node)  # type: ignore
-    builder.add_node("human_approval", human_approval_node) # type: ignore
-    builder.add_node("explainer", explainer_node) # type: ignore
-    builder.add_node("quiz_generator", quiz_generator_node) # type: ignore
-    builder.add_node("progress_coach", progress_coach_node) # type: ignore
+    builder.add_node("curriculum_planner",  curriculum_planner_node)  # type: ignore
+    builder.add_node("human_approval",      human_approval_node) # type: ignore
+    builder.add_node("explainer",           explainer_node) # type: ignore
+    builder.add_node("quiz_generator",      quiz_generator_node) # type: ignore
+    builder.add_node("progress_coach",      progress_coach_node) # type: ignore
 
     builder.set_entry_point("curriculum_planner")
     builder.add_edge("curriculum_planner", "human_approval")
-    builder.add_conditional_edges("human_approval", route_after_approval)
+    builder.add_conditional_edges("human_approval", route_after_approval,{"explainer": "explainer", "curriculum_planner": "curriculum_planner"})
+    
     builder.add_edge("explainer", "quiz_generator")
     builder.add_edge("quiz_generator", "progress_coach")
-    builder.add_conditional_edges("progress_coach", route_after_progress)
+    builder.add_conditional_edges("progress_coach", route_after_progress,{"explainer": "explainer", "end": END})
 
     return builder
 

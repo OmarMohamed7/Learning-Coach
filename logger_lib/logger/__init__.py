@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_FORMAT = "\n%(asctime)s | %(levelname)-8s | %(name)s | %(message)s\n"
 _configured = False
 
 
