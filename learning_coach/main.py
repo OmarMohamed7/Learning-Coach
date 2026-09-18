@@ -16,6 +16,7 @@ from database import engine, OrmBase, AsyncSessionLocal, CHECKPOINT_DB_URL
 from models import create_new_version, get_latest_version, get_agents
 from graph.workflow import compile_graph
 from langgraph.types import Command
+from langfuse import get_client
 
 
 load_dotenv()
@@ -29,6 +30,8 @@ ALL_AGENT_NAMES = [
     "quiz_generator",
     "progress_coach",
 ]
+
+
 
 def export_graph_image(graph):
     try:
@@ -184,6 +187,11 @@ async def run_cli_session(goal: str, session_id: str | None) -> None:
 
 if __name__ == "__main__":
     import argparse
+    
+    langfuse = get_client()
+
+    if langfuse.auth_check():
+        logger.info("Langfuse connected!")
 
     parser = argparse.ArgumentParser(
         description=(
