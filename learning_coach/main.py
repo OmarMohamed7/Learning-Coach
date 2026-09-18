@@ -10,7 +10,7 @@ from logger import get_logger
 from src.config import settings
 from fastapi import FastAPI
 from database import engine, OrmBase, AsyncSessionLocal, CHECKPOINT_DB_URL
-from models import create_new_version, get_latest_version, get_agents # type: ignore
+from models import create_new_version, get_latest_version, get_agents
 from graph.workflow import compile_graph
 
 load_dotenv()
