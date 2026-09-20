@@ -5,6 +5,7 @@ from typing import AsyncIterator
 import uuid
 
 from graph.state import StudyRoadmap, initial_state, session_is_complete
+from observability.langfuse_setup import flush_langfuse, get_langfuse_config
 import uvicorn
 from dotenv import load_dotenv
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -76,7 +77,7 @@ async def startup():
 
     logger.info("[Main] Getting tools...")
     tools = await get_mcp_tools()
-    logger.info(f"[Main] tools {tools}")
+    logger.info(f"[Main] tools [{(t.name for t in tools)}]")
 
     if len(tools) <=0:
         logger.error("[Main] No Tools found")
@@ -119,9 +120,9 @@ async def run_session(graph, goal: str, session_id: str | None = None) -> None:
     
     state = None if is_resume else initial_state(goal, session_id)
     
-    config = {
-        "configurable": {"thread_id": session_id},
-    }
+    config = get_langfuse_config(session_id)
+    
+    logger.info(f"[Config] : {config}")
     
     try:
         result = await graph.ainvoke(state, config=config)
@@ -175,6 +176,9 @@ async def run_session(graph, goal: str, session_id: str | None = None) -> None:
     else:
         logger.info(f"\n[Session '{session_id}'] Stopped with no pending interrupt or error.")
     logger.info(f"Final state: { {k: v for k, v in result.items() if k != 'messages'} }")
+    
+    # Flushes befor exiting
+    flush_langfuse()
 
     
     

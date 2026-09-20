@@ -1832,6 +1832,20 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain"
+version = "1.2.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langgraph" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/ed/990ec469ee2c4876adc367a1bb10143132a54a6fd9757269d2e440d65b37/langchain-1.2.11.tar.gz", hash = "sha256:1b0f680de88c178898a69f9814025729110fc68365b2c33cd2ba978114d5fc0a", size = 566207, upload-time = "2026-03-10T19:46:14.519Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/24/c9fd2d6f31ef7444e163aa9295c2c661892c8b2b683b4b6dd190ffd29a2f/langchain-1.2.11-py3-none-any.whl", hash = "sha256:ccc5d23e2568efa6e3cb2dde268a267d7f090bdad47d7e1ee5f0c9769e8cb7b9", size = 112136, upload-time = "2026-03-10T19:46:12.433Z" },
+]
+
+[[package]]
 name = "langchain-anthropic"
 version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2049,6 +2063,7 @@ dependencies = [
     { name = "greenlet" },
     { name = "httpx" },
     { name = "lancedb" },
+    { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-mcp-adapters" },
@@ -2087,6 +2102,7 @@ requires-dist = [
     { name = "greenlet" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "lancedb", specifier = "==0.29.2" },
+    { name = "langchain", specifier = ">=1.2.11" },
     { name = "langchain-anthropic", specifier = ">=1.7.2" },
     { name = "langchain-core", specifier = "==1.6.3" },
     { name = "langchain-mcp-adapters", specifier = ">=0.3.0" },

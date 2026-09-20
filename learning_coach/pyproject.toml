@@ -43,6 +43,7 @@ dependencies = [
     "logger-lib",
     "langchain-mcp-adapters>=0.3.0",
     "langchain-anthropic>=1.7.2",
+    "langchain>=1.2.11",
 ]
 
 [tool.uv.sources]
