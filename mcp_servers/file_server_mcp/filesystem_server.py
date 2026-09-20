@@ -102,18 +102,26 @@ def search_notes(query: str) -> list[dict]:
     
     results = []
     query = query_audit(query)
-    
+
+    # Tokenize so multi-word queries (e.g. LLM-generated topic titles like
+    # "Python Fundamentals") match notes containing any of the individual
+    # words, not just that exact phrase verbatim.
+    query_words = [w for w in query.split() if len(w) > 2]
+    if not query_words:
+        query_words = [query]
+
     for file_path in sorted(NOTES_BASE.rglob("*.md")):
         rel_path = str(file_path.relative_to(NOTES_BASE))
-        
+
         try:
             lines = file_path.read_text(encoding='UTF-8').splitlines()
         except (UnicodeDecodeError, PermissionError, OSError) as e:
             logger.error(f"Can not read file {file_path} : {e}")
             continue
-        
+
         for line_num, line in enumerate(lines, 1):
-            if query in line.lower():
+            line_lower = line.lower()
+            if any(word in line_lower for word in query_words):
                 results.append(
                     {
                         "file": rel_path,

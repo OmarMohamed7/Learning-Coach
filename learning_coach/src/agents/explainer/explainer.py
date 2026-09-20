@@ -1,5 +1,6 @@
 
 import json
+import asyncio
 
 from dotenv import load_dotenv
 from graph.state import get_current_topic
@@ -20,17 +21,24 @@ async def get_mcps_tools():
     logger.info(f"Discovered {len(discovered)} tools:")
     logger.info({t.name: t for t in discovered})
 
+# This is old
+# 1. Call list_study_files() to see what materials are available — this tool takes NO arguments
+# 2. Call search_notes(query) to find which files cover this topic — takes only "query"
+# 3. Call read_study_file(filename) to read the most relevant file(s) — takes only "filename"
+# 4. Check prior context: call memory_get(session_id, key) — this is the ONLY tool besides memory_set that takes "session_id"
+# 5. Write your explanation based on what you found in the notes
 EXPLAINER_SYSTEM_PROMPT = """You are an expert tutor explaining topics to a student.
 
 Your explanations must be grounded in the student's actual study materials.
 Use the available tools to find and read relevant notes before explaining.
 
 APPROACH (follow this sequence):
-1. Call list_study_files() to see what materials are available — this tool takes NO arguments
-2. Call search_notes(query) to find which files cover this topic — takes only "query"
-3. Call read_study_file(filename) to read the most relevant file(s) — takes only "filename"
-4. Check prior context: call memory_get(session_id, key) — this is the ONLY tool besides memory_set that takes "session_id"
-5. Write your explanation based on what you found in the notes
+
+1. Call search_notes(query) to find relevant study materials.
+2. Read the most relevant file(s) with read_study_file(filename).
+3. Optionally call memory_get(session_id, key) if prior context is useful.
+4. Explain the topic.
+5. Store the explained topic with memory_set.
 
 IMPORTANT: Only memory_get and memory_set accept a "session_id" argument.
 Never pass "session_id" to list_study_files, search_notes, or read_study_file — call them with exactly the arguments named above, nothing else.
@@ -52,6 +60,7 @@ async def execute_tool_call(tool_call: dict, tools: dict) -> str:
   args = tool_call['args']
 
   if name not in tools.keys():
+    logger.error(f"Error: unkown tool `{name}`")
     return f"Error: unkown tool `{name}`"
 
   schema = tools[name].args_schema
@@ -129,19 +138,38 @@ async def explainer_node(state: dict) -> dict:
       break
 
     logger.info(f"[Explainer] {len(res.tool_calls)} tool call(s) requested:")
-    for tool_call in res.tool_calls:
-      logger.info(f" -> {tool_call['name']}({tool_call['args']})")
-      result = await execute_tool_call(tool_call, tools) # type: ignore
+    # This is a sequential executing and can be parallised
+    # for tool_call in res.tool_calls:
+    #   logger.info(f" -> {tool_call['name']}({tool_call['args']})")
+    #   result = await execute_tool_call(tool_call, tools) # type: ignore
       
-      log_result = result[:100] + "..." if len(result) > 100 else result
-      logger.info(f"    ← {log_result}")
+    #   log_result = result[:100] + "..." if len(result) > 100 else result
+    #   logger.info(f"    ← {log_result}")
       
-      messages.append(
-        ToolMessage(
-          content= result,
-          tool_call_id=tool_call["id"]
-        )
-      )
+    #   messages.append(
+    #     ToolMessage(
+    #       content= result,
+    #       tool_call_id=tool_call["id"]
+    #     )
+    #   )
+    
+    # Execute concurrent requests
+    results = await asyncio.gather(
+        *[
+            execute_tool_call(tool_call, tools) # type: ignore
+            for tool_call in res.tool_calls
+        ]
+    )
+    
+    for tool_call, result in zip(res.tool_calls, results):
+        messages.append(
+            ToolMessage(
+                content=result,
+                tool_call_id=tool_call["id"],
+            )
+    )
+      
+      
     
   if final_res is None:
     logger.error(

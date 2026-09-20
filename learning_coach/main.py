@@ -1,7 +1,6 @@
 
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncIterator
 import uuid
 
 from graph.state import StudyRoadmap, initial_state, session_is_complete
@@ -11,7 +10,6 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from mcp_client.client import get_mcp_tools
 from logger import get_logger
-from src.config import settings
 from fastapi import FastAPI
 from database import engine, OrmBase, AsyncSessionLocal, CHECKPOINT_DB_URL
 from models import create_new_version, get_latest_version, get_agents
@@ -205,13 +203,13 @@ if __name__ == "__main__":
         ),
         epilog=(
             "Examples:\n"
-            "  python main.py \"Learn Python from scratch\"\n"
+            "  python main.py \"Learn Python closures\"\n"
             "  python main.py --resume a3f1b2c4\n"
             "  python main.py --serve\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("goal", nargs="?", default="Learnig Python From Scratch")
+    parser.add_argument("goal", nargs="?", default="Learn Python closures")
     parser.add_argument("--resume", metavar="SESSION_ID", help="Resume an existing session by ID")
     parser.add_argument("--serve", action="store_true", help="Run as the FastAPI/uvicorn API server instead of a CLI session")
 
