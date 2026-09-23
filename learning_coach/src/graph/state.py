@@ -121,6 +121,9 @@ class AgentState(TypedDict):
     exited: bool
     current_topic_index: int
     quiz_results: list[QuizResult]
+    # In-progress quiz for the current topic, held across quiz_question interrupts:
+    # {"topic": str, "questions": [question dicts], "answers": [graded QuizQuestion dicts]}
+    active_quiz: dict | None
     weak_areas: list[str]
     study_materials_path: str
     error: str | None
@@ -142,6 +145,7 @@ def initial_state(
         "exited": False,
         "current_topic_index": 0,
         "quiz_results" : [],
+        "active_quiz": None,
         "weak_areas": [],
         "study_materials_path": study_materials_path,
         "error": None

@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.types import interrupt
 
 from config.llm_factory import get_llm
 from graph.state import QuizQuestion, QuizResult, get_current_topic
@@ -65,80 +66,40 @@ def grade_answer(question: str, expected: str, student_answer: str) -> dict:
             "missing_concept": "",
         }
         
-# Interactive session of quiz
-def run_quiz(topic:str, explanation: str) -> QuizResult:
-    """ Run an interactive quiz session in the terminal. """
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Quiz: {topic}")
-    logger.info(f"{'='*60}")
-    logger.info("Answer each question in your own words. Press Enter to submit.\n")
-    
-    question_data = generate_questions(topic=topic, explanation= explanation)
-    graded_questions: list[QuizQuestion] = []
-    total_score = 0.0
-    weak_areas = []
-    
-    for i, q_data in enumerate(question_data,1):
-        question_text = q_data["question"]
-        expected = q_data["expected_answer"]
-        difficulty = q_data.get("difficulty" , "meduim")
-        
-        logger.info(f"Question {i} [{difficulty}]: {question_text}")
-        user_answer = input("Your answer: ").strip()
-        
-        if not user_answer:
-            logger.error("No Answer Provided!")
-            
-        logger.info("Grading...")
-        
-        grade = grade_answer(question= question_text, expected= expected , student_answer=user_answer)
-        
-        score = float(grade.get("score", 0.0))
-        correct = bool(grade.get("correct",False))
-        feedback = grade['feedback'] or ""
-        missing = grade['missing_concept'] or ""
+def build_quiz_result(topic: str, answers: list[dict]) -> QuizResult:
+    """ Aggregate graded answers into the QuizResult the Progress Coach reads. """
+    graded_questions = [
+        QuizQuestion(**{k: v for k, v in a.items() if k != "missing_concept"}) for a in answers
+    ]
+    weak_areas = list({a["missing_concept"] for a in answers if a.get("missing_concept")})
 
-        total_score += score
-        status = "✓" if correct else "✗"
-
-        logger.info(f"{status} Score: {score:.0%}. {feedback}\n")
-
-        if missing:
-            weak_areas.append(missing)
-
-        graded_questions.append(QuizQuestion(
-            question=question_text,
-            expected_answer=expected,
-            user_answer=user_answer,
-            correct=correct,
-            feedback=feedback,
-            score=score,
-        ))
-        
-    avg_score = (total_score / len(question_data)) if question_data else 0.0
+    avg_score = (sum(q.score for q in graded_questions) / len(graded_questions)) if graded_questions else 0.0
     correct_count = sum(1 for q in graded_questions if q.correct)
-        
+
     logger.info(f"{'='*60}")
     logger.info(f"Quiz complete! Score: {avg_score:.0%} ({correct_count}/{len(graded_questions)} correct)")
     if weak_areas:
-        logger.info(f"Areas to review: {', '.join(set(weak_areas))}")
+        logger.info(f"Areas to review: {', '.join(weak_areas)}")
     logger.info(f"{'='*60}\n")
-    
-    
+
     return QuizResult(
         topic=topic,
         questions=graded_questions,
         score=avg_score,
-        weak_areas=list(set(weak_areas)),
+        weak_areas=weak_areas,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
-    
+
+
 def quiz_generator_node(state: dict) -> dict:
     """ 
     Langgraph node: Quiz Generator
     
+    Generates the questions once and stores them in state["active_quiz"];
+    quiz_question_node then asks them one at a time.
+
     Reads: state['roadmap'], state["current_topic_index"], state["messages"]
-    Writes: state["quiz_results"], state["weak_areas"], state["error"]
+    Writes: state["active_quiz"], state["error"]
     """
     
     topic = get_current_topic(state=state)
@@ -159,18 +120,100 @@ def quiz_generator_node(state: dict) -> dict:
         explanation = f"Topic: {topic.title}. {topic.description}"
         
     logger.info(f"\n[Quiz Generator] Generating quiz for: {topic.title}")
-    quiz_res = run_quiz(topic= topic.title, explanation= explanation)
-    
-    existing_results = state.get("quiz_results", [])
-    all_weak_areas = list(set(
-        state.get("weak_areas",[]) + quiz_res.weak_areas
-    ))
-    
+    questions = generate_questions(topic=topic.title, explanation=explanation)
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Quiz: {topic.title}")
+    logger.info(f"{'='*60}")
+    logger.info("Answer each question in your own words. Press Enter to submit.\n")
+
     return {
-        "quiz_results": existing_results + [quiz_res], # The Progress Coach needs the current quiz result. The session summary needs all of them. 
+        "active_quiz": {"topic": topic.title, "questions": questions, "answers": []},
+        "error": None,
+    }
+
+
+def quiz_question_node(state: dict) -> dict:
+    """
+    Langgraph node: Quiz Question
+
+    Asks the next unanswered question via interrupt(), grades the answer and
+    records it. The graph loops back here until every question is answered,
+    then this node writes the final QuizResult.
+
+    One question per node run matters: on resume LangGraph re-executes the
+    node from the top, so anything before interrupt() must be cheap and
+    deterministic — generation and earlier grading must not live here.
+
+    Reads: state["active_quiz"], state["quiz_results"], state["weak_areas"]
+    Writes: state["active_quiz"], state["quiz_results"], state["weak_areas"], state["error"]
+    """
+    quiz = state.get("active_quiz")
+    if not quiz or not quiz.get("questions"):
+        return {"error": "No active quiz. Quiz Generator must run first"}
+
+    questions = quiz["questions"]
+    answers = list(quiz.get("answers", []))
+    i = len(answers)
+    q_data = questions[i]
+
+    question_text = q_data["question"]
+    expected = q_data["expected_answer"]
+    difficulty = q_data.get("difficulty", "medium")
+
+    user_answer = interrupt({
+        "type": "quiz_question",
+        "topic": quiz["topic"],
+        "index": i + 1,
+        "total": len(questions),
+        "difficulty": difficulty,
+        "question": question_text,
+        "prompt": "Your answer:",
+    })
+    user_answer = str(user_answer or "").strip()
+
+    if not user_answer:
+        logger.error("No Answer Provided!")
+
+    logger.info("Grading...")
+    grade = grade_answer(question=question_text, expected=expected, student_answer=user_answer)
+
+    score = float(grade.get("score", 0.0))
+    correct = bool(grade.get("correct", False))
+    feedback = grade.get("feedback") or ""
+    missing = grade.get("missing_concept") or ""
+
+    status = "✓" if correct else "✗"
+    logger.info(f"{status} Score: {score:.0%}. {feedback}\n")
+
+    answers.append({
+        "question": question_text,
+        "expected_answer": expected,
+        "user_answer": user_answer,
+        "correct": correct,
+        "score": score,
+        "feedback": feedback,
+        "missing_concept": missing,
+    })
+
+    if len(answers) < len(questions):
+        return {"active_quiz": {**quiz, "answers": answers}, "error": None}
+
+    quiz_res = build_quiz_result(topic=quiz["topic"], answers=answers)
+    all_weak_areas = list(set(state.get("weak_areas", []) + quiz_res.weak_areas))
+
+    return {
+        "quiz_results": state.get("quiz_results", []) + [quiz_res], # The Progress Coach needs the current quiz result. The session summary needs all of them. 
         "weak_areas": all_weak_areas,
+        "active_quiz": None,
         "error": None,
         "roadmap": state.get("roadmap"),
         "current_topic_index": state.get("current_topic_index", 0),
         "session_id": state.get("session_id", 0)
     }
+
+
+def quiz_is_pending(state: dict) -> bool:
+    """ True while the active quiz still has unanswered questions. """
+    quiz = state.get("active_quiz")
+    return bool(quiz) and len(quiz.get("answers", [])) < len(quiz.get("questions", []))

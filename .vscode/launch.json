@@ -49,18 +49,19 @@
             "justMyCode": true
         },
         {
-            "name": "Python: test_graph.py (prompt for goal)",
+            "name": "Python: main.py (prompt for goal)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/learning_coach/scripts/test_graph.py",
+            "program": "${workspaceFolder}/learning_coach/main.py",
             "python": "${workspaceFolder}/.venv/bin/python",
             "envFile": "${workspaceFolder}/learning_coach/.env",
             "cwd": "${workspaceFolder}/learning_coach",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--goal",
-                "${input:learningGoal}"
+                "${input:learningGoal}",
+                "--resume",
+                "${input:sessionId}"
             ]
         }
     ],
@@ -70,6 +71,12 @@
             "type": "promptString",
             "description": "What do you want to learn?",
             "default": "Learn English"
-        }
+        },
+        {
+            "id": "sessionId",
+            "type": "promptString",
+            "description": "What is session ID?",
+            "default": ""
+        },
     ]
 }

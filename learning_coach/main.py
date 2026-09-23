@@ -117,11 +117,11 @@ async def run_session(graph, goal: str, session_id: str | None = None) -> None:
     logger.info(f"{'='*60}")
     
     state = None if is_resume else initial_state(goal, session_id)
-    
+
     config = get_langfuse_config(session_id)
-    
+
     logger.info(f"[Config] : {config}")
-    
+
     try:
         result = await graph.ainvoke(state, config=config)
     except Exception as e:
@@ -130,17 +130,32 @@ async def run_session(graph, goal: str, session_id: str | None = None) -> None:
             print("If the session ID is wrong or the checkpoint database has been deleted, start a new session instead.")
             return
         raise
-    
+
     while "__interrupt__" in result:
+        # Fresh config (and Langfuse handler) per resume: each ainvoke() runs
+        # in its own async context, and interrupt()'s exception-based unwind
+        # leaves the previous handler's OTel span half-closed. Reusing one
+        # handler across resumes causes "context was created in a different
+        # Context" errors when it tries to detach a token from a dead context.
+        config = get_langfuse_config(session_id)
         interrupt_payload = result["__interrupt__"][0].value
 
-      
+        if interrupt_payload.get("type") == "quiz_question":
+            logger.info(
+                f"Question {interrupt_payload['index']}/{interrupt_payload['total']} "
+                f"[{interrupt_payload.get('difficulty', 'medium')}]: {interrupt_payload['question']}"
+            )
+            user_input = input(f"{interrupt_payload.get('prompt', 'Your answer:')} ").strip()
+            result = await graph.ainvoke(Command(resume=user_input), config=config) # type: ignore
+            continue
+
         raw_roadmap = interrupt_payload.get("roadmap")
         roadmap = (
             StudyRoadmap.from_dict(raw_roadmap) # type: ignore
             if isinstance(raw_roadmap, dict)
             else raw_roadmap
         )
+        
 
         # Display the roadmap for approval
         if roadmap:

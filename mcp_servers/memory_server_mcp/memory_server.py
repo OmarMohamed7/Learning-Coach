@@ -73,6 +73,12 @@ def memory_delete(session_id: str, key: str) -> str:
     return f"Key '{key}' not found in session '{session_id}'"
 
 
+@mcp.tool()
+def memory_dump_all() -> dict:
+    """Debug: return the entire in-memory store, all sessions and keys."""
+    return _store
+
+
 @mcp.resource("notes://session/{session_id}")
 def get_session_summary(session_id: str) -> str:
     """Full summary of everything stored for a session. URI: notes://session/{session_id}"""

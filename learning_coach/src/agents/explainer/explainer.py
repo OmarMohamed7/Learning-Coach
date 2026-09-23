@@ -195,6 +195,13 @@ async def explainer_node(state: dict) -> dict:
         f"{topic.description}"
     )
     messages.append(SystemMessage(content=fallback))
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Explanation: {topic.title}")
+    logger.info(f"{'='*60}")
+    logger.info(fallback)
+    logger.info(f"{'='*60}\n")
+
     return {"messages": messages, "error": None}
 
   logger.info(f"[Explainer] Explaination: {len(final_res.content)} characters")
