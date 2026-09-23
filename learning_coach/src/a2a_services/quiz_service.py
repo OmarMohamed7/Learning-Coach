@@ -15,6 +15,7 @@ from a2a.types import (
     TextPart,
 )
 from agents.quiz_generator.quiz_generator import generate_questions, grade_answer
+import uvicorn
 
 from logger import get_logger
 
@@ -163,3 +164,28 @@ class QuizAgentExecutor(AgentExecutor):
                 ],
             )
         )
+        
+    async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
+        return await super().cancel(context, event_queue)
+    
+
+def create_quiz_server():
+    """ Build the A2A Starletter application """
+    request_handler = DefaultRequestHandler(
+        agent_executor= QuizAgentExecutor(),
+        task_store= InMemoryTaskStore()
+    )
+    
+    app = A2AStarletteApplication(
+        agent_card= QUIZ_AGENT_CARD,
+        http_handler= request_handler
+    )
+    
+    return app.build()
+
+if __name__ == '__main__':
+    logger.info("[Quiz A2A Service] Starting on http://localhost:9001")
+    logger.info("[Quiz A2A Service] Agent Card: "
+          "http://localhost:9001/.well-known/agent-card.json")
+    logger.info("[Quiz A2A Service] Press Ctrl+C to stop\n")
+    uvicorn.run(create_quiz_server(), host="0.0.0.0", port=9001, log_level="warning")
