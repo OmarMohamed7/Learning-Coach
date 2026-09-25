@@ -65,7 +65,7 @@ All LLM calls fan in to a local **Ollama** server (`localhost:11434`), using `qw
 - **Observability:** [Langfuse](https://langfuse.com/)
 - **Evaluation:** [DeepEval](https://github.com/confident-ai/deepeval)
 - **Local inference:** [Ollama](https://ollama.com/)
-- **API/serving:** FastAPI, Uvicorn, Streamlit
+- **UI:** Chainlit
 
 ## Setup
 
@@ -91,7 +91,8 @@ ollama serve
 ## Running
 
 ```bash
-uv run main.py
+cd learning_coach
+uv run chainlit run chainlit_app.py
 ```
 
 The A2A services (Quiz Generator on `9001`, CrewAI Study Buddy on `9002`) and MCP servers are started separately as the corresponding modules are built out.

@@ -124,6 +124,8 @@ class AgentState(TypedDict):
     # In-progress quiz for the current topic, held across quiz_question interrupts:
     # {"topic": str, "questions": [question dicts], "answers": [graded QuizQuestion dicts]}
     active_quiz: dict | None
+    # Latest explanation for display: {"topic", "index", "total", "text", "from_notes"}
+    explanation: dict | None
     weak_areas: list[str]
     study_materials_path: str
     error: str | None
@@ -146,6 +148,7 @@ def initial_state(
         "current_topic_index": 0,
         "quiz_results" : [],
         "active_quiz": None,
+        "explanation": None,
         "weak_areas": [],
         "study_materials_path": study_materials_path,
         "error": None

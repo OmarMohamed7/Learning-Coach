@@ -43,11 +43,14 @@ APPROACH (follow this sequence):
 IMPORTANT: Only memory_get and memory_set accept a "session_id" argument.
 Never pass "session_id" to list_study_files, search_notes, or read_study_file — call them with exactly the arguments named above, nothing else.
 
-EXPLANATION FORMAT:
-- Start with a real-world analogy (1-2 sentences)
-- State the core concept clearly (2-3 sentences)
-- Show a concrete code example from the student's notes
-- End with one common mistake or gotcha to watch out for
+EXPLANATION FORMAT (write in Markdown, detailed but readable, roughly 500-800 words):
+- **Overview**: what the topic is and why it matters (2-3 sentences)
+- **Analogy**: a real-world analogy that makes it intuitive
+- **Core concepts**: walk through the key ideas step by step, each with a short explanation
+- **Examples**: 2-3 code examples of increasing difficulty, taken from the student's notes when possible.
+  Put each in a fenced code block, comment the important lines, and show the expected output
+- **Common mistakes**: 2-3 gotchas, each with a short wrong-vs-right snippet
+- **Key takeaways**: 3-5 bullet points to remember
 
 After writing the explanation, store what you explained:
   memory_set(session_id, 'explained_topics', <comma-separated topic titles>)
@@ -88,13 +91,44 @@ async def execute_tool_call(tool_call: dict, tools: dict) -> str:
     return f"Error executing {name}({args}): {type(e).__name__}: {e}"
 
 
+GENERAL_EXPLANATION_PROMPT = """You are an expert tutor. Write a detailed Markdown explanation of the topic below
+for a student. Use these sections: Overview, Analogy, Core concepts, Examples (2-3 code examples of increasing
+difficulty in fenced code blocks, with comments and expected output), Common mistakes (2-3, each with a
+wrong-vs-right snippet), Key takeaways (3-5 bullets). Aim for roughly 500-800 words."""
+
+
+async def _general_explanation(title: str, description: str) -> str:
+  """Fallback when no study materials match: explain from the model's own knowledge, no tools."""
+  try:
+    res = await get_llm(temperature=0.3).ainvoke([
+      SystemMessage(content=GENERAL_EXPLANATION_PROMPT),
+      HumanMessage(content=f"Topic: {title}\nContext: {description}"),
+    ])
+    text = str(res.content).strip()
+    return text or description
+  except Exception as e:
+    logger.error(f"[Explainer] General explanation failed, using topic description: {e}")
+    return description
+
+
+def _explanation_for_display(state: dict, title: str, text: str, from_notes: bool) -> dict:
+  """What the UI shows for a topic: where we are in the roadmap, plus just the explanation text."""
+  return {
+    "topic": title,
+    "index": state.get("current_topic_index", 0) + 1,
+    "total": len(state["roadmap"].topics),
+    "text": text,
+    "from_notes": from_notes,
+  }
+
+
 async def explainer_node(state: dict) -> dict:
   
   """
   Langgraph node: Explainer Agent
   
   Reads: state["roadmap"], state["current_topic"], state["session_id"]
-  Writes: state["messages"], state["error"]
+  Writes: state["messages"], state["explanation"], state["error"]
  
   """
   
@@ -112,7 +146,7 @@ async def explainer_node(state: dict) -> dict:
     return {"error": "No MCP tools available. Did startup fail to load them?"}
   tools = {t.name: t for t in mcp_tools}
 
-  llm = get_llm(temperature=0.3, json_mode=True).bind_tools(tools=list(tools.values()))
+  llm = get_llm(temperature=0.3).bind_tools(tools=list(tools.values()))
   
   messages = [
     SystemMessage(content= EXPLAINER_SYSTEM_PROMPT),
@@ -189,10 +223,11 @@ async def explainer_node(state: dict) -> dict:
     #   2. Use that generated explanation as the fallback content below instead
     #      of `topic.description`.
     # Keep returning {"error": None} so routing still continues to quiz_generator.
+    general = await _general_explanation(topic.title, topic.description)
     fallback = (
         f"I couldn't find study materials covering '{topic.title}' in your notes, "
         "so here's a general explanation instead:\n\n"
-        f"{topic.description}"
+        f"{general}"
     )
     messages.append(SystemMessage(content=fallback))
 
@@ -202,7 +237,11 @@ async def explainer_node(state: dict) -> dict:
     logger.info(fallback)
     logger.info(f"{'='*60}\n")
 
-    return {"messages": messages, "error": None}
+    return {
+      "messages": messages,
+      "error": None,
+      "explanation": _explanation_for_display(state, topic.title, general, from_notes=False),
+    }
 
   logger.info(f"[Explainer] Explaination: {len(final_res.content)} characters")
 
@@ -212,7 +251,11 @@ async def explainer_node(state: dict) -> dict:
   logger.info(final_res.content)
   logger.info(f"{'='*60}\n")
 
-  return {"messages": messages , "error": None}
+  return {
+    "messages": messages,
+    "error": None,
+    "explanation": _explanation_for_display(state, topic.title, str(final_res.content), from_notes=True),
+  }
 
   
 

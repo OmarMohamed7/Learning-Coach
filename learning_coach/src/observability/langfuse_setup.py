@@ -99,7 +99,7 @@ def flush_langfuse() -> None:
     Flush any pending Langfuse events before process exit.
 
     Langfuse sends traces asynchronously in a background thread.
-    Call this at the end of main.py to ensure all traces are sent
+    Call this when a session ends to ensure all traces are sent
     before the process exits.
 
     If Langfuse is not configured, this is a no-op.

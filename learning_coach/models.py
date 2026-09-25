@@ -87,3 +87,21 @@ async def get_latest_version(session: AsyncSession, agent_name: str) -> AgentVer
         .where(Agent.name == agent_name, AgentVersion.is_latest == True)  # noqa: E712
     )
     return result.scalar_one_or_none()
+
+
+class AppUser(OrmBase):
+    """Login account for the Chainlit UI (named `app_users`: Chainlit's data layer owns `users`).
+
+    Only the argon2 hash is stored, never the password.
+    """
+
+    __tablename__ = "app_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    password_hash: Mapped[str]
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
+    )
