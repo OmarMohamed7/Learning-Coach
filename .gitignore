@@ -11,3 +11,6 @@ wheels/
 
 # Environment variables
 .env
+
+# Chainlit generates these on every start
+**/.chainlit/translations/

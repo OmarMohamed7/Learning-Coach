@@ -2,6 +2,8 @@
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
 import uuid
+import chainlit as cl
+from auth import authenticate
 
 from graph.state import StudyRoadmap, initial_state, session_is_complete
 from observability.langfuse_setup import flush_langfuse, get_langfuse_config
@@ -11,11 +13,12 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from mcp_client.client import get_mcp_tools
 from logger import get_logger
 from fastapi import FastAPI
-from database import engine, OrmBase, AsyncSessionLocal, CHECKPOINT_DB_URL
+from database import DATABASE_URL, engine, OrmBase, AsyncSessionLocal, CHECKPOINT_DB_URL
 from models import create_new_version, get_latest_version, get_agents
 from graph.workflow import compile_graph
 from langgraph.types import Command
 from langfuse import get_client
+from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 
 
 load_dotenv()
@@ -43,6 +46,17 @@ def export_graph_image(graph):
     except Exception as e:
         logger.error(f"Could not render graph via mermaid: {e}")
 
+@cl.password_auth_callback # type: ignore
+def auth_callback(username: str, password: str):
+    user = authenticate(username, password)
+    if user is None:
+        return None
+    return cl.User(identifier=user["username"], metadata={"role": user["role"]})
+
+
+@cl.data_layer
+def get_data_layer():
+    return SQLAlchemyDataLayer(conninfo=DATABASE_URL)
 
 @asynccontextmanager
 async def startup():
@@ -237,3 +251,4 @@ if __name__ == "__main__":
     else:
         asyncio.run(run_cli_session(goal=args.goal, session_id=None))
         
+
