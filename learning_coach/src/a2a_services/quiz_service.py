@@ -97,6 +97,7 @@ class QuizAgentExecutor(AgentExecutor):
         logger.info(f"[Quiz A2A] Task received: topic='{topic}', "
               f"answers_provided={len(provided_answers)}")
         
+        # 3 is the number of questions
         questions_data = await asyncio.to_thread(
             generate_questions, topic, explanation, 3
         )

@@ -5,33 +5,30 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     # ── Core agent framework ──────────────────────────────────────────────────
-    "langgraph==1.1.0",
-    "langgraph-checkpoint-sqlite==3.0.3",
-    "langchain-core==1.6.3",
-    "langchain-ollama==1.0.0",
+    "langgraph>=1.1.0",
+    "langgraph-checkpoint-sqlite>=3.0.3",
+    "langchain-core>=1.6.3",
+    "langchain-ollama>=1.0.0",
     # ── MCP protocol ─────────────────────────────────────────────────────────
-    "mcp==1.26.0",
+    "mcp>=1.28.1,<2",
     # ── A2A protocol ─────────────────────────────────────────────────────────
-    "a2a-sdk==0.3.25",
-    # ── Cross-framework interop ───────────────────────────────────────────────
-    "crewai==1.13.0",
+    "a2a-sdk>=0.3.25,<1",
     # ── Observability ─────────────────────────────────────────────────────────
     "langfuse>=4.15",
     # ── Evaluation ────────────────────────────────────────────────────────────
-    "deepeval==3.9.1",
+    "deepeval>=3.9.1",
     # ── LLM gateway ───────────────────────────────────────────────────────────
-    "litellm==1.82.4",
+    "litellm>=1.82.4",
     # ── HTTP and API utilities ────────────────────────────────────────────────
-    "openai==2.8.0",
-    "httpx==0.28.1",
-    "fastapi==0.115.0",
-    "uvicorn==0.34.0",
-    "streamlit==1.43.2",
+    "httpx>=0.28.1",
+    "fastapi>=0.116.1",
+    "uvicorn>=0.54.0",
+    "streamlit>=1.43.2",
     # ── Data and utilities ────────────────────────────────────────────────────
-    "pydantic==2.11.9",
-    "python-dotenv==1.1.1",
-    "tenacity==8.5.0",
-    "lancedb==0.29.2",
+    "pydantic>=2.12.0",
+    "python-dotenv>=1.2.3",
+    "tenacity>=8.5.0",
+    "lancedb>=0.29.2",
     "sqlalchemy",
     "asyncpg",
     "greenlet",
@@ -44,6 +41,8 @@ dependencies = [
     "langchain-mcp-adapters>=0.3.0",
     "langchain-anthropic>=1.7.2",
     "langchain>=1.2.11",
+    # ─── UI ──────────────────────────────────────────────────────────────────
+    "chainlit>=2.12.0",
 ]
 
 [tool.uv.sources]
@@ -52,8 +51,8 @@ logger-lib = { workspace = true }
 [project.optional-dependencies]
 test = [
     # ── Testing ───────────────────────────────────────────────────────────────
-    "pytest==8.3.0",
-    "pytest-asyncio==0.25.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
 ]
 
 [build-system]

@@ -1,0 +1,21 @@
+{
+  "extraPaths": [
+    "mcp_servers",
+    "logger_lib"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "crewai_service",
+      "extraPaths": [
+        "crewai_service/.venv/lib/python3.13/site-packages"
+      ]
+    },
+    {
+      "root": ".",
+      "extraPaths": [
+        "mcp_servers",
+        "logger_lib"
+      ]
+    }
+  ]
+}

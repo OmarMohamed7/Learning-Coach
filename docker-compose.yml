@@ -23,6 +23,16 @@ services:
 
     restart: unless-stopped
 
+  crewai-service:
+    build:
+      context: .
+      dockerfile: crewai_service/Dockerfile
+    container_name: crewai-service
+    image: crewai/service:v1.0.0
+    ports:
+      - 9002:9002
+    restart: unless-stopped
+
   langfuse-server:
     image: langfuse/langfuse:2
     depends_on:

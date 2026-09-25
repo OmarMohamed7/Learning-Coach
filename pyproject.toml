@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 
 [tool.uv.workspace]
 members = ["learning_coach", "mcp_servers", "logger_lib"]
+exclude = ["crewai_service"]
 
 [tool.uv]
 package = false
