@@ -1,14 +1,18 @@
-# Welcome to Chainlit! 🚀🤖
+# Learning Coach 🎓
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+Tell me what you want to learn, and I'll build a study plan and coach you through it.
 
-## Useful Links 🔗
+## How it works
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+1. **Give me a goal.** For example: *"Python closures"*, *"Docker basics in 2 weeks"*, or *"SQL in 5 topics"*. Mention a time frame or a number of topics if you have one, and I'll stick to it.
+2. **Review your roadmap.** I propose a plan with topics, and you **Approve** or **Reject** it.
+3. **Learn each topic.** I write an explanation with examples, using your study notes when they match.
+4. **Take a short quiz.** I grade each answer and explain what you got right or wrong.
+5. **Get coaching.** After every topic, your progress coach summarizes how you did and what comes next.
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+## Tips
 
-## Welcome screen
-
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+- 🛑 **Stop** ends the current session, roadmap and topic included. Then just type a new goal.
+- 🕘 **Your chats are saved.** Open the history sidebar to pick up a past session where you left off.
+- ✍️ While the box is empty you'll see Stop. Start typing and it turns into Send.
+- 🆕 **New here?** Use *Create account* on the login page.
