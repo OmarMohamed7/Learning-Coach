@@ -126,6 +126,10 @@ class AgentState(TypedDict):
     active_quiz: dict | None
     # Latest explanation for display: {"topic", "index", "total", "text", "from_notes"}
     explanation: dict | None
+    # Grade of the question just answered, for display: {"index", "total", "score", "correct", "feedback"}
+    last_grade: dict | None
+    # Progress coach message for display: {"topic", "score", "summary", "encouragement", "next_topic"}
+    coach_note: dict | None
     weak_areas: list[str]
     study_materials_path: str
     error: str | None
@@ -149,6 +153,8 @@ def initial_state(
         "quiz_results" : [],
         "active_quiz": None,
         "explanation": None,
+        "last_grade": None,
+        "coach_note": None,
         "weak_areas": [],
         "study_materials_path": study_materials_path,
         "error": None

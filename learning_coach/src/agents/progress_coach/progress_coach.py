@@ -107,6 +107,11 @@ async def progress_coach_node(state: dict) -> dict:
     logger.info(f"Coach: {coaching['summary']}")
     logger.info(f"{coaching['encouragement']}")
 
+    next_title = None
+    if not all_done:
+        _next = topics[next_idx]
+        next_title = _next.get("title") if isinstance(_next, dict) else _next.title
+
     if all_done:
         results = state.get("quiz_results", [])
         avg = sum(r.score for r in results) / max(len(results), 1)
@@ -121,5 +126,12 @@ async def progress_coach_node(state: dict) -> dict:
         "roadmap":              roadmap,
         "current_topic_index":  next_idx,
         "messages":             [AIMessage(content=coaching["summary"])],
+        "coach_note": {
+            "topic":         latest.topic,
+            "score":         score,
+            "summary":       coaching["summary"],
+            "encouragement": coaching.get("encouragement", ""),
+            "next_topic":    next_title,
+        },
         "error":                None,
     }

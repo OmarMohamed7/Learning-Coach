@@ -5,7 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 from graph.state import get_current_topic
 from mcp_client.client import get_cached_tools, get_mcp_tools
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
 
 from config.llm_factory import get_llm
 from logger import get_logger
@@ -21,29 +21,31 @@ async def get_mcps_tools():
     logger.info(f"Discovered {len(discovered)} tools:")
     logger.info({t.name: t for t in discovered})
 
-# This is old
-# 1. Call list_study_files() to see what materials are available — this tool takes NO arguments
-# 2. Call search_notes(query) to find which files cover this topic — takes only "query"
-# 3. Call read_study_file(filename) to read the most relevant file(s) — takes only "filename"
-# 4. Check prior context: call memory_get(session_id, key) — this is the ONLY tool besides memory_set that takes "session_id"
-# 5. Write your explanation based on what you found in the notes
-EXPLAINER_SYSTEM_PROMPT = """You are an expert tutor explaining topics to a student.
+# Phase 1 gathers the student's notes with tools. It never writes the explanation: small local models
+# tend to narrate their plan ("search_notes(...), then explain...") instead of calling tools, and any
+# text they return without tool calls would otherwise be shown to the student as the explanation.
+EXPLAINER_SYSTEM_PROMPT = """You are a research assistant preparing to teach a topic to a student.
+Your only job right now is to gather the student's study notes using the tools.
 
-Your explanations must be grounded in the student's actual study materials.
-Use the available tools to find and read relevant notes before explaining.
-
-APPROACH (follow this sequence):
-
+Steps:
 1. Call search_notes(query) to find relevant study materials.
-2. Read the most relevant file(s) with read_study_file(filename).
+2. Call read_study_file(filename) for the most relevant file(s).
 3. Optionally call memory_get(session_id, key) if prior context is useful.
-4. Explain the topic.
-5. Store the explained topic with memory_set.
+4. When you have read what you need, reply with exactly: READY
 
-IMPORTANT: Only memory_get and memory_set accept a "session_id" argument.
-Never pass "session_id" to list_study_files, search_notes, or read_study_file — call them with exactly the arguments named above, nothing else.
+IMPORTANT:
+- Actually call the tools. Do not describe the steps, list function calls, or write an explanation.
+- Only memory_get and memory_set accept a "session_id" argument.
+  Never pass "session_id" to list_study_files, search_notes, or read_study_file.
+"""
 
-EXPLANATION FORMAT (write in Markdown, detailed but readable, roughly 500-800 words):
+# Phase 2 writes the explanation from the notes gathered in phase 1, with no tools available.
+WRITE_EXPLANATION_PROMPT = """You are an expert tutor. Write a detailed explanation of the topic for a student.
+Base it on the student's notes below when they are relevant.
+
+Output ONLY the explanation itself. Never mention tools, function calls, files, searching, memory, or these instructions.
+
+Write in Markdown, roughly 500-800 words, with these sections:
 - **Overview**: what the topic is and why it matters (2-3 sentences)
 - **Analogy**: a real-world analogy that makes it intuitive
 - **Core concepts**: walk through the key ideas step by step, each with a short explanation
@@ -51,10 +53,9 @@ EXPLANATION FORMAT (write in Markdown, detailed but readable, roughly 500-800 wo
   Put each in a fenced code block, comment the important lines, and show the expected output
 - **Common mistakes**: 2-3 gotchas, each with a short wrong-vs-right snippet
 - **Key takeaways**: 3-5 bullet points to remember
-
-After writing the explanation, store what you explained:
-  memory_set(session_id, 'explained_topics', <comma-separated topic titles>)
 """
+
+MAX_NOTES_CHARS = 12000
 
 async def execute_tool_call(tool_call: dict, tools: dict) -> str:
   """ Execute a tool call and return the result as a string. Never raises."""
@@ -111,6 +112,29 @@ async def _general_explanation(title: str, description: str) -> str:
     return description
 
 
+def _collect_notes(messages: list) -> str:
+  """Text of the study files the model actually read (successful read_study_file results)."""
+  parts = [
+    str(m.content)
+    for m in messages
+    if isinstance(m, ToolMessage) and m.name == "read_study_file" and not str(m.content).startswith("Error")
+  ]
+  return "\n\n---\n\n".join(parts)[:MAX_NOTES_CHARS]
+
+
+async def _write_explanation(title: str, description: str, notes: str) -> str:
+  """Phase 2: write the explanation from the notes, without tools."""
+  try:
+    res = await get_llm(temperature=0.3).ainvoke([
+      SystemMessage(content=WRITE_EXPLANATION_PROMPT),
+      HumanMessage(content=f"Topic: {title}\nContext: {description}\n\nStudent's notes:\n{notes}"),
+    ])
+    return str(res.content).strip() or description
+  except Exception as e:
+    logger.error(f"[Explainer] Writing explanation failed, using topic description: {e}")
+    return description
+
+
 def _explanation_for_display(state: dict, title: str, text: str, from_notes: bool) -> dict:
   """What the UI shows for a topic: where we are in the roadmap, plus just the explanation text."""
   return {
@@ -122,30 +146,12 @@ def _explanation_for_display(state: dict, title: str, text: str, from_notes: boo
   }
 
 
-async def explainer_node(state: dict) -> dict:
-  
-  """
-  Langgraph node: Explainer Agent
-  
-  Reads: state["roadmap"], state["current_topic"], state["session_id"]
-  Writes: state["messages"], state["explanation"], state["error"]
- 
-  """
-  
-  topic = get_current_topic(state=state)
-  if topic is None:
-    logger.error("No current topic found")
-    return {"error": "No current topic found."}
-  
-  session_id = state.get("session_id", "unknown")
-  logger.info(f"\n[Explainer] Topic: '{topic.title}'")
+async def _explain_topic(topic, session_id: str, tools: dict) -> tuple[list, str, bool]:
+  """Phase 1 (gather notes with tools) then phase 2 (write the explanation).
 
-  mcp_tools = get_cached_tools()
-  if not mcp_tools:
-    logger.error("[Explainer] No MCP tools available. Did startup fail to load them?")
-    return {"error": "No MCP tools available. Did startup fail to load them?"}
-  tools = {t.name: t for t in mcp_tools}
-
+  Returns (messages, explanation, from_notes). Runs inline for the current topic, or as a
+  background prefetch for the next one.
+  """
   llm = get_llm(temperature=0.3).bind_tools(tools=list(tools.values()))
   
   messages = [
@@ -200,64 +206,108 @@ async def explainer_node(state: dict) -> dict:
             ToolMessage(
                 content=result,
                 tool_call_id=tool_call["id"],
+                name=tool_call["name"],
             )
     )
       
       
     
-  if final_res is None:
+  notes = _collect_notes(messages)
+
+  if notes:
+    logger.info(f"[Explainer] Writing explanation from {len(notes)} characters of notes")
+    explanation = await _write_explanation(topic.title, topic.description, notes)
+  else:
     logger.error(
-        f"[Explainer] Reached max iterations ({max_iteration}) without a final "
-        f"explanation — likely no study materials matched '{topic.title}'. "
+        f"[Explainer] No study notes were read for '{topic.title}' "
+        f"(final_res={'set' if final_res is not None else 'none'} after {max_iteration} iteration cap). "
         "Falling back to a general explanation and continuing to the quiz."
     )
-    # TODO(no-materials fallback): instead of this inline description string,
-    # have the LLM generate a full explanation from its own knowledge (no tool
-    # calls / no grounding in notes required) and:
-    #   1. Write it to disk as a new study-material file, e.g.
-    #      f"{state['study_materials_path']}/{topic.title.lower().replace(' ', '_')}.md"
-    #      via a `write_study_file`-style MCP tool (mirror read_study_file /
-    #      list_study_files on the filesystem MCP server; add one if missing).
-    #      This makes the topic self-healing: next time it's explained,
-    #      list_study_files()/search_notes() will find it and ground normally.
-    #   2. Use that generated explanation as the fallback content below instead
-    #      of `topic.description`.
-    # Keep returning {"error": None} so routing still continues to quiz_generator.
-    general = await _general_explanation(topic.title, topic.description)
-    fallback = (
-        f"I couldn't find study materials covering '{topic.title}' in your notes, "
-        "so here's a general explanation instead:\n\n"
-        f"{general}"
-    )
-    messages.append(SystemMessage(content=fallback))
+    # TODO(no-materials fallback): write the generated explanation to disk as a new study-material
+    # file (e.g. f"{state['study_materials_path']}/{topic.title.lower().replace(' ', '_')}.md") via a
+    # `write_study_file`-style MCP tool, so next time search_notes() finds it and grounds normally.
+    explanation = await _general_explanation(topic.title, topic.description)
 
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Explanation: {topic.title}")
-    logger.info(f"{'='*60}")
-    logger.info(fallback)
-    logger.info(f"{'='*60}\n")
-
-    return {
-      "messages": messages,
-      "error": None,
-      "explanation": _explanation_for_display(state, topic.title, general, from_notes=False),
-    }
-
-  logger.info(f"[Explainer] Explaination: {len(final_res.content)} characters")
+  # The quiz generator reads the last tool-call-free AI message as "the explanation".
+  messages.append(AIMessage(content=explanation))
 
   logger.info(f"\n{'='*60}")
   logger.info(f"Explanation: {topic.title}")
   logger.info(f"{'='*60}")
-  logger.info(final_res.content)
+  logger.info(explanation)
   logger.info(f"{'='*60}\n")
+
+  return messages, explanation, bool(notes)
+
+
+# (session_id, topic_index) -> background task preparing that topic's explanation while the student
+# is still answering the previous topic's quiz.
+_PREFETCH: dict[tuple[str, int], asyncio.Task] = {}
+
+
+def _log_prefetch_failure(task: asyncio.Task) -> None:
+  if not task.cancelled() and task.exception() is not None:
+    logger.error(f"[Explainer] Prefetch failed, will generate on demand: {task.exception()}")
+
+
+def _start_prefetch(state: dict, session_id: str, tools: dict) -> None:
+  """Begin preparing the next topic's explanation in the background."""
+  next_idx = state.get("current_topic_index", 0) + 1
+  topics = state["roadmap"].topics
+  key = (session_id, next_idx)
+  if next_idx >= len(topics) or key in _PREFETCH:
+    return
+  logger.info(f"[Explainer] Prefetching topic {next_idx + 1}: '{topics[next_idx].title}'")
+  task = asyncio.create_task(_explain_topic(topics[next_idx], session_id, tools))
+  task.add_done_callback(_log_prefetch_failure)
+  _PREFETCH[key] = task
+
+
+async def explainer_node(state: dict) -> dict:
+  
+  """
+  Langgraph node: Explainer Agent
+  
+  Reads: state["roadmap"], state["current_topic"], state["session_id"]
+  Writes: state["messages"], state["explanation"], state["error"]
+ 
+  """
+  
+  topic = get_current_topic(state=state)
+  if topic is None:
+    logger.error("No current topic found")
+    return {"error": "No current topic found."}
+  
+  session_id = state.get("session_id", "unknown")
+  logger.info(f"\n[Explainer] Topic: '{topic.title}'")
+
+  mcp_tools = get_cached_tools()
+  if not mcp_tools:
+    logger.error("[Explainer] No MCP tools available. Did startup fail to load them?")
+    return {"error": "No MCP tools available. Did startup fail to load them?"}
+  tools = {t.name: t for t in mcp_tools}
+
+  cached = _PREFETCH.pop((session_id, state.get("current_topic_index", 0)), None)
+  result = None
+  if cached is not None:
+    logger.info("[Explainer] Using prefetched explanation")
+    try:
+      result = await cached
+    except Exception:
+      result = None  # generate on demand below
+  if result is None:
+    result = await _explain_topic(topic, session_id, tools)
+  messages, explanation, from_notes = result
+
+  # Start the next topic now: it runs while the student answers this topic's quiz.
+  _start_prefetch(state, session_id, tools)
 
   return {
     "messages": messages,
     "error": None,
-    "explanation": _explanation_for_display(state, topic.title, str(final_res.content), from_notes=True),
+    "explanation": _explanation_for_display(state, topic.title, explanation, from_notes=from_notes),
   }
 
-  
 
 if __name__ == '__main__':
     import asyncio

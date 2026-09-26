@@ -182,14 +182,38 @@ STAGE_DONE = {
 }
 
 
-async def _show_explanation(explanation: dict) -> None:
-    """Post the topic header and explanation as a normal chat message."""
-    await cl.Message(
-        content=(
-            f"### 📘 Topic {explanation['index']}/{explanation['total']}: {explanation['topic']}\n\n"
-            f"{explanation['text']}"
-        )
-    ).send()
+def _format_explanation(explanation: dict) -> str:
+    return (
+        f"### 📘 Topic {explanation['index']}/{explanation['total']}: {explanation['topic']}\n\n"
+        f"{explanation['text']}"
+    )
+
+
+def _format_grade(grade: dict) -> str:
+    icon = "✅" if grade["correct"] else "❌"
+    text = f"{icon} **Question {grade['index']}/{grade['total']} — score: {grade['score']:.0%}**"
+    if grade.get("feedback"):
+        text += f"\n\n{grade['feedback']}"
+    return text
+
+
+def _format_coach_note(note: dict) -> str:
+    text = f"### 🎯 Progress Coach — {note['topic']}: {note['score']:.0%}\n\n{note['summary']}"
+    if note.get("encouragement"):
+        text += f"\n\n_{note['encouragement']}_"
+    if note.get("next_topic"):
+        text += f"\n\n**Up next:** {note['next_topic']}"
+    else:
+        text += "\n\n🎉 **You've finished every topic in your roadmap!**"
+    return text
+
+
+# Graph node -> (state key it writes for display, formatter)
+DISPLAYED = {
+    "explainer": ("explanation", _format_explanation),
+    "quiz_question": ("last_grade", _format_grade),
+    "progress_coach": ("coach_note", _format_coach_note),
+}
 
 
 async def _run(graph_input) -> dict:
@@ -201,9 +225,9 @@ async def _run(graph_input) -> dict:
     config = _config()
     interrupt = None
     done: list[str] = []
-    explanations: list[dict] = []
+    posts: list[str] = []
 
-    async with cl.Step(name="Working on it...", type="run", show_input=False) as step:
+    async with cl.Step(name="Working on it...", type="run", show_input=True) as step:
         async for update in _graph.astream(graph_input, config=config, stream_mode="updates"):  # type: ignore
             for node, value in update.items():
                 if node == "__interrupt__":
@@ -212,13 +236,15 @@ async def _run(graph_input) -> dict:
                 done.append(f"✅ {STAGE_DONE.get(node, node)}")
                 step.output = "\n".join(done)
                 await step.update()
-                if node == "explainer" and (value or {}).get("explanation"):
-                    explanations.append(value["explanation"])
+                if node in DISPLAYED:
+                    key, fmt = DISPLAYED[node]
+                    if (value or {}).get(key):
+                        posts.append(fmt(value[key]))
 
-    # Posted after the step closes and before the caller asks the next question, so the
-    # explanation always sits above its quiz questions in the chat.
-    for explanation in explanations:
-        await _show_explanation(explanation)
+    # Posted in graph order after the step closes and before the caller asks the next question, so
+    # e.g. the grade comes first, then the coach note, then the next topic's explanation above its questions.
+    for post in posts:
+        await cl.Message(post).send()
 
     if interrupt is not None:
         return {"__interrupt__": interrupt}

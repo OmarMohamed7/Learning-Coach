@@ -146,7 +146,7 @@ def quiz_question_node(state: dict) -> dict:
     deterministic — generation and earlier grading must not live here.
 
     Reads: state["active_quiz"], state["quiz_results"], state["weak_areas"]
-    Writes: state["active_quiz"], state["quiz_results"], state["weak_areas"], state["error"]
+    Writes: state["active_quiz"], state["last_grade"], state["quiz_results"], state["weak_areas"], state["error"]
     """
     quiz = state.get("active_quiz")
     if not quiz or not quiz.get("questions"):
@@ -196,8 +196,16 @@ def quiz_question_node(state: dict) -> dict:
         "missing_concept": missing,
     })
 
+    last_grade = {
+        "index": i + 1,
+        "total": len(questions),
+        "score": score,
+        "correct": correct,
+        "feedback": feedback,
+    }
+
     if len(answers) < len(questions):
-        return {"active_quiz": {**quiz, "answers": answers}, "error": None}
+        return {"active_quiz": {**quiz, "answers": answers}, "last_grade": last_grade, "error": None}
 
     quiz_res = build_quiz_result(topic=quiz["topic"], answers=answers)
     all_weak_areas = list(set(state.get("weak_areas", []) + quiz_res.weak_areas))
@@ -206,6 +214,7 @@ def quiz_question_node(state: dict) -> dict:
         "quiz_results": state.get("quiz_results", []) + [quiz_res], # The Progress Coach needs the current quiz result. The session summary needs all of them. 
         "weak_areas": all_weak_areas,
         "active_quiz": None,
+        "last_grade": last_grade,
         "error": None,
         "roadmap": state.get("roadmap"),
         "current_topic_index": state.get("current_topic_index", 0),
