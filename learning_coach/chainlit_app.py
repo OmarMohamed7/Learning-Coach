@@ -1,11 +1,17 @@
 """Learning Coach entry point (Chainlit UI). Run from learning_coach/: uv run chainlit run chainlit_app.py
 
-The Chainlit thread id doubles as the LangGraph thread_id, so reopening a past
-conversation resumes the graph from its checkpoint.
+The Chainlit thread id doubles as the LangGraph thread_id (the first goal of a chat uses it as-is; later goals
+in the same chat get `<thread id>:<suffix>`), so reopening a past conversation resumes the graph from its checkpoint.
 """
+import asyncio
+import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 
 import chainlit as cl
+from chainlit.auth import get_current_user
+from chainlit.server import app as chainlit_server
+from fastapi import Depends
+from sqlalchemy import text
 from dotenv import load_dotenv
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
@@ -14,7 +20,9 @@ load_dotenv()
 
 import register  # noqa: F401  (adds the /register page to Chainlit's server)
 from auth import authenticate
-from database import CHECKPOINT_DB_URL, OrmBase, AsyncSessionLocal, engine
+from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
+from chainlit_tables import create_chainlit_tables
+from database import CHECKPOINT_DB_URL, DATABASE_URL, OrmBase, AsyncSessionLocal, engine
 from graph.workflow import compile_graph
 from mcp_client.client import get_mcp_tools
 from models import create_new_version, get_agents, get_latest_version
@@ -59,6 +67,7 @@ async def startup():
     logger.info("[Main] Connecting to database...\n")
     async with engine.begin() as conn:
         await conn.run_sync(OrmBase.metadata.create_all)
+    await create_chainlit_tables(engine)
 
     logger.info("[Main] Getting Agents and ensuring each agent has a version...")
     async with AsyncSessionLocal() as session:
@@ -101,6 +110,12 @@ _stack = AsyncExitStack()
 _graph = None
 
 
+@cl.data_layer
+def sql_data_layer():
+    # Persists threads/steps so the sidebar can list past chats and resume them.
+    return SQLAlchemyDataLayer(conninfo=DATABASE_URL)
+
+
 @cl.password_auth_callback  # type: ignore
 async def auth_callback(username: str, password: str):
     user = await authenticate(username, password)
@@ -120,10 +135,14 @@ async def on_app_shutdown():
     await _stack.aclose()
 
 
+def _graph_tid() -> str:
+    return cl.user_session.get("graph_tid") or cl.context.session.thread_id
+
+
 def _config():
     user = cl.user_session.get("user")
     return get_langfuse_config(
-        cl.context.session.thread_id,
+        _graph_tid(),
         user_id=user.identifier if user else "anonymous",
     )
 
@@ -267,31 +286,130 @@ async def _drive(graph_input) -> None:
     if result.get("error"):
         await cl.Message(f"**Error:** {result['error']}").send()
     else:
-        await cl.Message("Session finished. Start a new chat to study something else.").send()
+        await cl.Message("Session finished.").send()
     flush_langfuse()
+
+
+# user identifier -> callable that stops that user's running session (used by POST /stop-session).
+_STOPPERS: dict[str, callable] = {}  # type: ignore
+
+
+def _user_id() -> str:
+    user = cl.user_session.get("user")
+    return user.identifier if user else "anonymous"
+
+
+async def _run_stoppable(graph_input) -> None:
+    """Drive the graph in its own task so a stop request can cancel it, even while it waits for an answer."""
+    task = asyncio.create_task(_drive(graph_input))
+    stopped = False
+    uid = _user_id()
+
+    def stop() -> bool:
+        nonlocal stopped
+        if task.done():
+            return False
+        stopped = True
+        task.cancel()
+        return True
+
+    _STOPPERS[uid] = stop
+    try:
+        await task
+    except asyncio.CancelledError:
+        # Our own stop sets `stopped`; anything else is Chainlit cancelling the handler, so let it through.
+        if not stopped:
+            raise
+        await cl.Message("Stopped. What would you like to learn next?").send()
+    finally:
+        if _STOPPERS.get(uid) is stop:
+            del _STOPPERS[uid]
+        flush_langfuse()
+
+
+async def _session(goal: str | None = None) -> None:
+    """Run study sessions back to back: each goal gets its own LangGraph thread, and finishing or stopping
+    one asks for the next goal."""
+    while True:
+        if goal is None:
+            reply = await cl.AskUserMessage(
+                content="What would you like to learn?", timeout=ASK_TIMEOUT_SECONDS
+            ).send()
+            if not reply:
+                return
+            goal = reply["output"].strip()  # type: ignore
+        if not goal:
+            goal = None
+            continue
+
+        # The first goal keeps the Chainlit thread id so old chats stay resumable.
+        if cl.user_session.get("graph_tid") is None:
+            cl.user_session.set("graph_tid", cl.context.session.thread_id)
+        else:
+            cl.user_session.set("graph_tid", f"{cl.context.session.thread_id}:{uuid.uuid4().hex[:8]}")
+
+        await cl.Message(f"Starting: **{goal}**").send()
+        await _run_stoppable(initial_state(goal, _graph_tid()))
+        goal = None
+
+
+async def _stop_session(user=Depends(get_current_user)):
+    """Called by public/custom.js when the user presses the composer's Stop button."""
+    stop = _STOPPERS.get(user.identifier if user else "anonymous")
+    return {"stopped": bool(stop and stop())}
+
+
+# Chainlit's catch-all route is already registered; ours must sit in front of it.
+_before = len(chainlit_server.router.routes)
+chainlit_server.add_api_route("/stop-session", _stop_session, methods=["POST"], include_in_schema=False)
+_ours = chainlit_server.router.routes[_before:]
+del chainlit_server.router.routes[_before:]
+chainlit_server.router.routes[0:0] = _ours
+
+
+@cl.on_stop
+async def on_stop():
+    # Chainlit's own Stop button (shown while the coach is busy) cancels the whole handler.
+    await cl.Message("Stopped. Type a new topic to start again.").send()
 
 
 @cl.on_chat_start
 async def on_chat_start():
-    reply = await cl.AskUserMessage(
-        content="What would you like to learn?", timeout=ASK_TIMEOUT_SECONDS
-    ).send()
-    if not reply:
-        return
-    goal = reply["output"].strip() # type: ignore
-    await _drive(initial_state(goal, cl.context.session.thread_id))
+    await _session()
+
+
+async def _latest_graph_tid(thread_id: str) -> str:
+    """The most recent LangGraph thread started inside this Chainlit chat (checkpoint ids are time-ordered)."""
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT thread_id FROM checkpoints WHERE thread_id = :tid OR thread_id LIKE :prefix "
+                    "ORDER BY checkpoint_id DESC LIMIT 1"
+                ),
+                {"tid": thread_id, "prefix": f"{thread_id}:%"},
+            )
+        ).first()
+    return row[0] if row else thread_id
 
 
 @cl.on_chat_resume
 async def on_chat_resume(thread):
     await cl.Message("Welcome back, resuming where you left off...").send()
     try:
-        await _drive(None)
+        cl.user_session.set("graph_tid", await _latest_graph_tid(thread["id"]))
+        await _run_stoppable(None)
     except Exception as e:
         logger.error(f"[Chainlit] Could not resume thread {thread['id']}: {e}")
-        await cl.Message("Could not resume this session. Start a new chat.").send()
+        await cl.Message("Could not resume this session. Type a new goal to start over.").send()
+        return
+    await _session()
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    await cl.Message("Please answer the current question, or start a new chat for a new goal.").send()
+    """Only reached when no question is pending (after a stop or a finished session): treat it as a new goal."""
+    if _user_id() in _STOPPERS:
+        await cl.Message("Please answer the current question, or press Stop to start a new topic.").send()
+        return
+    await _session(goal=message.content.strip())

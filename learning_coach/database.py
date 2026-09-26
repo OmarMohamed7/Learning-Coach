@@ -1,8 +1,12 @@
+import os
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/learning_coach_db"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/learning_coach_db",
+)
 
 # langgraph's AsyncPostgresSaver uses psycopg, not asyncpg/SQLAlchemy — same DB, different driver/DSN scheme.
 CHECKPOINT_DB_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")

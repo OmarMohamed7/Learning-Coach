@@ -1,0 +1,9 @@
+.venv
+.git
+**/__pycache__
+**/.pytest_cache
+.env
+**/.env
+.deepeval
+learning_coach/data
+learning_coach/tests
