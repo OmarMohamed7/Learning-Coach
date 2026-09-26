@@ -44,8 +44,11 @@ _STATEMENTS = [
         "showInput" TEXT,
         "language" TEXT,
         "indent" INT,
-        "defaultOpen" BOOLEAN
+        "defaultOpen" BOOLEAN,
+        "autoCollapse" BOOLEAN
     )""",
+    # Tables created before this column existed.
+    '''ALTER TABLE steps ADD COLUMN IF NOT EXISTS "autoCollapse" BOOLEAN''',
     """CREATE TABLE IF NOT EXISTS elements (
         "id" UUID PRIMARY KEY,
         "threadId" UUID,

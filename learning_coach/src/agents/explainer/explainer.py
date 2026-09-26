@@ -98,10 +98,19 @@ difficulty in fenced code blocks, with comments and expected output), Common mis
 wrong-vs-right snippet), Key takeaways (3-5 bullets). Aim for roughly 500-800 words."""
 
 
-async def _general_explanation(title: str, description: str) -> str:
+# Tag on the LLM call whose tokens the UI shows live (see _run in chainlit_app.py).
+STREAM_TAG = "stream_explanation"
+
+
+def _writer_llm(stream: bool):
+  llm = get_llm(temperature=0.3)
+  return llm.with_config(tags=[STREAM_TAG]) if stream else llm
+
+
+async def _general_explanation(title: str, description: str, stream: bool = False) -> str:
   """Fallback when no study materials match: explain from the model's own knowledge, no tools."""
   try:
-    res = await get_llm(temperature=0.3).ainvoke([
+    res = await _writer_llm(stream).ainvoke([
       SystemMessage(content=GENERAL_EXPLANATION_PROMPT),
       HumanMessage(content=f"Topic: {title}\nContext: {description}"),
     ])
@@ -122,10 +131,10 @@ def _collect_notes(messages: list) -> str:
   return "\n\n---\n\n".join(parts)[:MAX_NOTES_CHARS]
 
 
-async def _write_explanation(title: str, description: str, notes: str) -> str:
+async def _write_explanation(title: str, description: str, notes: str, stream: bool = False) -> str:
   """Phase 2: write the explanation from the notes, without tools."""
   try:
-    res = await get_llm(temperature=0.3).ainvoke([
+    res = await _writer_llm(stream).ainvoke([
       SystemMessage(content=WRITE_EXPLANATION_PROMPT),
       HumanMessage(content=f"Topic: {title}\nContext: {description}\n\nStudent's notes:\n{notes}"),
     ])
@@ -146,11 +155,12 @@ def _explanation_for_display(state: dict, title: str, text: str, from_notes: boo
   }
 
 
-async def _explain_topic(topic, session_id: str, tools: dict) -> tuple[list, str, bool]:
+async def _explain_topic(topic, session_id: str, tools: dict, stream: bool = False) -> tuple[list, str, bool]:
   """Phase 1 (gather notes with tools) then phase 2 (write the explanation).
 
-  Returns (messages, explanation, from_notes). Runs inline for the current topic, or as a
-  background prefetch for the next one.
+  Returns (messages, explanation, from_notes). Runs inline for the current topic (stream=True, so the
+  UI shows the explanation as it is written), or as a background prefetch for the next one (stream=False,
+  so its tokens never appear while the student is still on the current topic).
   """
   llm = get_llm(temperature=0.3).bind_tools(tools=list(tools.values()))
   
@@ -216,7 +226,7 @@ async def _explain_topic(topic, session_id: str, tools: dict) -> tuple[list, str
 
   if notes:
     logger.info(f"[Explainer] Writing explanation from {len(notes)} characters of notes")
-    explanation = await _write_explanation(topic.title, topic.description, notes)
+    explanation = await _write_explanation(topic.title, topic.description, notes, stream)
   else:
     logger.error(
         f"[Explainer] No study notes were read for '{topic.title}' "
@@ -226,7 +236,7 @@ async def _explain_topic(topic, session_id: str, tools: dict) -> tuple[list, str
     # TODO(no-materials fallback): write the generated explanation to disk as a new study-material
     # file (e.g. f"{state['study_materials_path']}/{topic.title.lower().replace(' ', '_')}.md") via a
     # `write_study_file`-style MCP tool, so next time search_notes() finds it and grounds normally.
-    explanation = await _general_explanation(topic.title, topic.description)
+    explanation = await _general_explanation(topic.title, topic.description, stream)
 
   # The quiz generator reads the last tool-call-free AI message as "the explanation".
   messages.append(AIMessage(content=explanation))
@@ -296,7 +306,7 @@ async def explainer_node(state: dict) -> dict:
     except Exception:
       result = None  # generate on demand below
   if result is None:
-    result = await _explain_topic(topic, session_id, tools)
+    result = await _explain_topic(topic, session_id, tools, stream=True)
   messages, explanation, from_notes = result
 
   # Start the next topic now: it runs while the student answers this topic's quiz.

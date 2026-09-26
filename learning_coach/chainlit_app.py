@@ -26,6 +26,7 @@ from database import CHECKPOINT_DB_URL, DATABASE_URL, OrmBase, AsyncSessionLocal
 from graph.workflow import compile_graph
 from mcp_client.client import get_mcp_tools
 from models import create_new_version, get_agents, get_latest_version
+from agents.explainer.explainer import STREAM_TAG
 from graph.state import StudyRoadmap, initial_state
 from logger import get_logger
 from observability.langfuse_setup import flush_langfuse, get_langfuse_config
@@ -245,10 +246,32 @@ async def _run(graph_input) -> dict:
     interrupt = None
     done: list[str] = []
     posts: list[str] = []
+    live: cl.Message | None = None  # the explanation while it is being written
+
+    async def flush_posts():
+        # Posted in graph order (e.g. the grade, then the coach note) before the next explanation starts.
+        for post in posts:
+            await cl.Message(post).send()
+        posts.clear()
 
     async with cl.Step(name="Working on it...", type="run", show_input=True) as step:
-        async for update in _graph.astream(graph_input, config=config, stream_mode="updates"):  # type: ignore
-            for node, value in update.items():
+        async for mode, data in _graph.astream(  # type: ignore
+            graph_input, config=config, stream_mode=["updates", "messages"] # type: ignore
+        ):
+            if mode == "messages":
+                chunk, meta = data
+                token = chunk.content # type: ignore
+                if STREAM_TAG not in (meta.get("tags") or []) or not isinstance(token, str) or not token: # type: ignore
+                    continue
+                if live is None:
+                    await flush_posts()
+                    live = cl.Message(content="")
+                    live.parent_id = None  # show it in the chat, not inside the collapsed step
+                    await live.send()
+                await live.stream_token(token)
+                continue
+
+            for node, value in data.items(): # type: ignore
                 if node == "__interrupt__":
                     interrupt = value
                     continue
@@ -258,12 +281,14 @@ async def _run(graph_input) -> dict:
                 if node in DISPLAYED:
                     key, fmt = DISPLAYED[node]
                     if (value or {}).get(key):
-                        posts.append(fmt(value[key]))
+                        if node == "explainer" and live is not None:
+                            live.content = fmt(value[key])  # swap in the final text with its topic header
+                            await live.update()
+                            live = None
+                        else:
+                            posts.append(fmt(value[key]))
 
-    # Posted in graph order after the step closes and before the caller asks the next question, so
-    # e.g. the grade comes first, then the coach note, then the next topic's explanation above its questions.
-    for post in posts:
-        await cl.Message(post).send()
+    await flush_posts()
 
     if interrupt is not None:
         return {"__interrupt__": interrupt}
