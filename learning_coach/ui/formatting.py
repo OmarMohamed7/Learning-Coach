@@ -47,9 +47,7 @@ def format_coach_note(note: dict) -> str:
     text = f"### 🎯 Progress Coach — {note['topic']}: {note['score']:.0%}\n\n{note['summary']}"
     if note.get("encouragement"):
         text += f"\n\n_{note['encouragement']}_"
-    if note.get("next_topic"):
-        text += f"\n\n**Up next:** {note['next_topic']}"
-    else:
+    if not note.get("next_topic"):
         text += "\n\n🎉 **You've finished every topic in your roadmap!**"
     return text
 

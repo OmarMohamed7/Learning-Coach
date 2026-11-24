@@ -91,4 +91,8 @@ def choose_next_step_node(state: dict) -> dict:
         logger.info("[Next Step] Taking the quiz")
         return {"skip_quiz": False}
     logger.info("[Next Step] Quiz skipped")
-    return {"skip_quiz": True, "current_topic_index": idx + 1}
+    return {
+        "skip_quiz": True,
+        "current_topic_index": idx + 1,
+        "proceeding": topics[idx + 1].title if has_next else None,
+    }

@@ -120,6 +120,7 @@ class AgentState(TypedDict):
     approved: bool
     exited: bool
     skip_quiz: bool
+    proceeding: str | None
     current_topic_index: int
     quiz_results: list[QuizResult]
     # In-progress quiz for the current topic, held across quiz_question interrupts:

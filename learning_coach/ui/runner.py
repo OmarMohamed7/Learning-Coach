@@ -55,13 +55,13 @@ async def _run_graph(graph_input, shown: list[str]) -> dict:
     config["callbacks"] = [*config.get("callbacks", []), watcher]
     interrupt = None
     done: list[str] = []
-    posts: list[str] = []
     live: cl.Message | None = None  # the explanation while it is being written
 
-    async def flush_posts():
-        for post in posts:
-            await cl.Message(post).send()
-        posts.clear()
+    async def say(text: str) -> None:
+        msg = cl.Message(content=text)
+        msg.parent_id = None  # show it in the chat, not inside the collapsed step
+        await msg.send()
+        shown.append(text)
 
     async with cl.Step(name="Working on it...", type="run", show_input=True) as step:
         async for mode, data in _graph.astream(graph_input, config=config, stream_mode=["updates", "messages"]):  # type: ignore
@@ -71,7 +71,6 @@ async def _run_graph(graph_input, shown: list[str]) -> dict:
                 if STREAM_TAG not in (meta.get("tags") or []) or not isinstance(token, str) or not token:  # type: ignore
                     continue
                 if live is None:
-                    await flush_posts()
                     live = cl.Message(content="")
                     live.parent_id = None  # show it in the chat, not inside the collapsed step
                     await live.send()
@@ -85,19 +84,18 @@ async def _run_graph(graph_input, shown: list[str]) -> dict:
                 done.append(f"✅ {STAGE_DONE.get(node, node)}")
                 step.output = "\n".join(done)
                 await step.update()
-                if node not in DISPLAYED or not (value or {}).get(DISPLAYED[node][0]):
-                    continue
-                key, fmt = DISPLAYED[node]
-                if node == "explainer" and live is not None:
-                    live.content = fmt(value[key])  # swap in the final text with its topic header
-                    await live.update()
-                    shown.append(live.content)
-                    live = None
-                else:
-                    posts.append(fmt(value[key]))
-                    shown.append(posts[-1])
-
-    await flush_posts()
+                if node in DISPLAYED and (value or {}).get(DISPLAYED[node][0]):
+                    key, fmt = DISPLAYED[node]
+                    if node == "explainer" and live is not None:
+                        live.content = fmt(value[key])  # swap in the final text with its topic header
+                        await live.update()
+                        shown.append(live.content)
+                        live = None
+                    else:
+                        await say(fmt(value[key]))
+                upcoming = (value or {}).get("proceeding") or ((value or {}).get("coach_note") or {}).get("next_topic")
+                if upcoming:
+                    await say(f"➡️ _Proceeding with **{upcoming}**…_")
     if watcher.used:
         await cl.Message(
             f"⚠️ {current_choice().label} failed, so this step was answered by "
