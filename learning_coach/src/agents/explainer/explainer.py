@@ -98,7 +98,7 @@ difficulty in fenced code blocks, with comments and expected output), Common mis
 wrong-vs-right snippet), Key takeaways (3-5 bullets). Aim for roughly 500-800 words."""
 
 
-# Tag on the LLM call whose tokens the UI shows live (see _run in chainlit_app.py).
+# Tag on the LLM call whose tokens the UI shows live (see _run in main.py).
 STREAM_TAG = "stream_explanation"
 
 
@@ -162,7 +162,7 @@ async def _explain_topic(topic, session_id: str, tools: dict, stream: bool = Fal
   UI shows the explanation as it is written), or as a background prefetch for the next one (stream=False,
   so its tokens never appear while the student is still on the current topic).
   """
-  llm = get_llm(temperature=0.3).bind_tools(tools=list(tools.values()))
+  llm = get_llm(temperature=0.3, tools=list(tools.values()))
   
   messages = [
     SystemMessage(content= EXPLAINER_SYSTEM_PROMPT),

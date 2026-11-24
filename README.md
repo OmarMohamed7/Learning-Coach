@@ -92,7 +92,7 @@ ollama serve
 
 ```bash
 cd learning_coach
-uv run chainlit run chainlit_app.py
+uv run chainlit run main.py
 ```
 
 The A2A services (Quiz Generator on `9001`, CrewAI Study Buddy on `9002`) and MCP servers are started separately as the corresponding modules are built out.

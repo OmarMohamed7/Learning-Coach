@@ -1,96 +1,43 @@
-
-#   cp .env.prod.example .env.prod && edit it
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# Production-like stack, mirroring the GCP Cloud Run deploy (deploy/gcp/deploy.sh):
+#   app + file-server-mcp + memory-server-mcp. Postgres is Supabase (DATABASE_URL), the LLM is Ollama Cloud (Groq fallback),
+#   and TLS comes from the host (Cloud Run), so there is no caddy, ollama or postgres container.
+#
+#   docker compose -f docker-compose.prod.yml --env-file learning_coach/.env up -d --build
+#   open http://localhost:8000
 services:
-  caddy:
-    image: caddy:2
-    ports: ["80:80", "443:443"]
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    depends_on: [app]
-    restart: unless-stopped
-
   app:
     build: { context: ., dockerfile: learning_coach/Dockerfile }
-    environment: &app_env
-      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/learning_coach_db
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the Supabase session pooler URL}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://ollama.com}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:?set OLLAMA_API_KEY (https://ollama.com/settings/keys)}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gpt-oss:120b}
+      FALLBACK_LLM_PROVIDER: ${FALLBACK_LLM_PROVIDER:-groq}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
-      OLLAMA_MODEL: ${OLLAMA_MODEL}
-      OLLAMA_BASE_URL: http://ollama:11434
       CHECKPOINT_DB: data/checkpoints.db
       NOTES_PATH: study_materials/sample_notes
-      LANGFUSE_HOST: ${LANGFUSE_HOST}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      QUIZ_SERVICE_URL: http://quiz-service:9001
-      STUDY_BUDDY_URL: http://crewai-service:9002
-      USE_A2A_QUIZ: "true"
-      USE_STUDY_BUDDY: "true"
+      # Quiz A2A service and CrewAI study buddy are not deployed: the in-process paths are used instead.
+      USE_A2A_QUIZ: "false"
+      USE_STUDY_BUDDY: "false"
+      QUIZ_SERVICE_URL: http://unused:9001
+      STUDY_BUDDY_URL: http://unused:9002
       MCP_FILESYSTEM_URL: http://file-server-mcp:8001/mcp
       MCP_MEMORY_URL: http://memory-server-mcp:8002/mcp
-      CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET}
+      CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET:?set CHAINLIT_AUTH_SECRET}
+      DAILY_GOAL_LIMIT: ${DAILY_GOAL_LIMIT:-5}
       LOG_LEVEL: INFO
-    depends_on:
-      postgres: { condition: service_healthy }
-      ollama: { condition: service_started }
-      file-server-mcp: { condition: service_started }
-      memory-server-mcp: { condition: service_started }
-    restart: unless-stopped
-
-  quiz-service:
-    build: { context: ., dockerfile: learning_coach/Dockerfile }
-    command: ["python", "-m", "src.a2a_services.quiz_service"]
-    environment:
-      <<: *app_env
-    depends_on: [ollama]
+    depends_on: [file-server-mcp, memory-server-mcp]
     restart: unless-stopped
 
   file-server-mcp:
     build: { context: ., dockerfile: mcp_servers/file_server_mcp/Dockerfile }
-    volumes:
-      - ./learning_coach/study_materials/sample_notes:/app/study_materials/sample_notes
     restart: unless-stopped
 
   memory-server-mcp:
     build: { context: ., dockerfile: mcp_servers/memory_server_mcp/Dockerfile }
     restart: unless-stopped
-
-  crewai-service:
-    build: { context: ., dockerfile: crewai_service/Dockerfile }
-    environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL}
-      OLLAMA_BASE_URL: http://ollama:11434
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    volumes: [ollama_data:/root/.ollama]
-    environment:
-      OLLAMA_KEEP_ALIVE: 24h
-      OLLAMA_NUM_PARALLEL: "2"
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: learning_coach_db
-    volumes: [postgres_data:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d learning_coach_db"]
-      interval: 5s
-      retries: 10
-    restart: unless-stopped
-
-volumes:
-  caddy_data:
-  ollama_data:
-  postgres_data:

@@ -15,4 +15,3 @@ wheels/
 # Chainlit generates these on every start
 **/.chainlit/translations/
 
-.env.prod

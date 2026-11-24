@@ -1,0 +1,21 @@
+# Builds the three Cloud Run images in parallel and pushes them to Artifact Registry.
+# Called by deploy.sh:  gcloud builds submit --config deploy/gcp/cloudbuild.yaml --substitutions=_REPO=...,_TAG=...
+steps:
+  - id: app
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "learning_coach/Dockerfile", "-t", "${_REPO}/app:${_TAG}", "."]
+    waitFor: ["-"]
+  - id: file-server-mcp
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "mcp_servers/file_server_mcp/Dockerfile", "-t", "${_REPO}/file-server-mcp:${_TAG}", "."]
+    waitFor: ["-"]
+  - id: memory-server-mcp
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "mcp_servers/memory_server_mcp/Dockerfile", "-t", "${_REPO}/memory-server-mcp:${_TAG}", "."]
+    waitFor: ["-"]
+images:
+  - ${_REPO}/app:${_TAG}
+  - ${_REPO}/file-server-mcp:${_TAG}
+  - ${_REPO}/memory-server-mcp:${_TAG}
+options:
+  machineType: E2_HIGHCPU_8

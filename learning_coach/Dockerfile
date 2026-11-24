@@ -18,4 +18,4 @@ WORKDIR /app/learning_coach
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH="/app/learning_coach"
 
 EXPOSE 8000
-CMD ["chainlit", "run", "chainlit_app.py", "--host", "0.0.0.0", "--port", "8000", "--headless"]
+CMD ["chainlit", "run", "main.py", "--host", "0.0.0.0", "--port", "8000", "--headless"]

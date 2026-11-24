@@ -125,7 +125,7 @@ def search_notes(query: str) -> list[dict]:
                 results.append(
                     {
                         "file": rel_path,
-                        "line_numeber": line_num,
+                        "line_number": line_num,
                         "line": line
                     }
                 )

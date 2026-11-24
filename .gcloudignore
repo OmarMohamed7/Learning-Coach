@@ -1,0 +1,15 @@
+# Files Cloud Build never uploads (secrets and local state stay on your machine).
+.git
+.gitignore
+.gcloudignore
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.deepeval
+**/.DS_Store
+learning_coach/data
+learning_coach/tests
+*.png

@@ -1,6 +1,8 @@
 import os
 from logger import get_logger
 
+from config.llm_factory import get_model_name
+
 logger = get_logger(__name__)
 
 def _laangfuse_configured() -> bool:
@@ -75,7 +77,7 @@ def get_langfuse_config(
             "langfuse_user_id": user_id,
             "langfuse_tags": ["learning-coach", "local-inference"],
             # Your custom framework metadata
-            "model": os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
+            "model": get_model_name(),
             "framework": "langgraph",
         }
     }

@@ -1,10 +1,11 @@
-"""Learning Coach entry point (Chainlit UI). Run from learning_coach/: uv run chainlit run chainlit_app.py
+"""Learning Coach entry point (Chainlit UI). Run from learning_coach/: uv run chainlit run main.py
 
 The Chainlit thread id doubles as the LangGraph thread_id (the first goal of a chat uses it as-is; later goals
 in the same chat get `<thread id>:<suffix>`), so reopening a past conversation resumes the graph from its checkpoint.
 """
 import asyncio
 import uuid
+from datetime import datetime, timezone
 from contextlib import AsyncExitStack, asynccontextmanager
 
 import chainlit as cl
@@ -26,6 +27,7 @@ from database import CHECKPOINT_DB_URL, DATABASE_URL, OrmBase, AsyncSessionLocal
 from graph.workflow import compile_graph
 from mcp_client.client import get_mcp_tools
 from models import create_new_version, get_agents, get_latest_version
+from usage_limit import DAILY_GOAL_LIMIT, try_consume_goal  # also registers the goal_usage table for create_all
 from agents.explainer.explainer import STREAM_TAG
 from graph.state import StudyRoadmap, initial_state
 from logger import get_logger
@@ -367,13 +369,22 @@ async def _session(goal: str | None = None) -> None:
             goal = None
             continue
 
+        allowed, remaining, retry_at = await try_consume_goal(_user_id())
+        if not allowed:
+            wait = max(0, int((retry_at - datetime.now(timezone.utc)).total_seconds()))  # type: ignore
+            await cl.Message(
+                f"You've reached today's limit of **{DAILY_GOAL_LIMIT} study goals**. "
+                f"You can start a new one in about **{wait // 3600}h {wait % 3600 // 60}m**."
+            ).send()
+            return
+
         # The first goal keeps the Chainlit thread id so old chats stay resumable.
         if cl.user_session.get("graph_tid") is None:
             cl.user_session.set("graph_tid", cl.context.session.thread_id)
         else:
             cl.user_session.set("graph_tid", f"{cl.context.session.thread_id}:{uuid.uuid4().hex[:8]}")
 
-        await cl.Message(f"Starting: **{goal}**").send()
+        await cl.Message(f"Starting: **{goal}** _({remaining} of {DAILY_GOAL_LIMIT} goals left today)_").send()
         await _run_stoppable(initial_state(goal, _graph_tid()))
         goal = None
 

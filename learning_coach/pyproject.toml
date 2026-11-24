@@ -18,16 +18,13 @@ dependencies = [
     # ── Evaluation ────────────────────────────────────────────────────────────
     "deepeval>=3.9.1",
     # ── LLM gateway ───────────────────────────────────────────────────────────
-    "litellm>=1.82.4",
     # ── HTTP and API utilities ────────────────────────────────────────────────
     "httpx>=0.28.1",
     "uvicorn>=0.54.0",
-    "streamlit>=1.43.2",
     # ── Data and utilities ────────────────────────────────────────────────────
     "pydantic>=2.12.0",
     "python-dotenv>=1.2.3",
     "tenacity>=8.5.0",
-    "lancedb>=0.29.2",
     "sqlalchemy",
     "asyncpg",
     "greenlet",
@@ -44,6 +41,8 @@ dependencies = [
     "chainlit>=2.12.0",
     "argon2-cffi>=23.1.0",
     "langchain-openai>=1.6.6",
+    "google-auth>=2.40",
+    "requests>=2.34.2",
 ]
 
 [tool.uv.sources]
