@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 def generate_questions(topic: str, explanation: str, n: int = 3) -> list[dict]:
     """ Generate n quiz questions from the Explainer's topic """
     
-    llm = get_llm(temperature=0.4, json_mode=True)
+    llm = get_llm(temperature=0.4, json_mode=True, name="generate-quiz")
 
     prompt = GENERATION_PROMPT.format(n=n)
     
@@ -45,7 +45,7 @@ def generate_questions(topic: str, explanation: str, n: int = 3) -> list[dict]:
     
 def grade_answer(question: str, expected: str, student_answer: str) -> dict:
     """ Grade a student's answer using the LLM as judge. """
-    llm = get_llm(temperature=0.1, json_mode=True)
+    llm = get_llm(temperature=0.1, json_mode=True, name="grade-answer")
 
     prompt = GRADING_PROMPT.format(
         question= question,

@@ -31,7 +31,7 @@ from usage_limit import DAILY_GOAL_LIMIT, try_consume_goal  # also registers the
 from agents.explainer.explainer import STREAM_TAG
 from graph.state import StudyRoadmap, initial_state
 from logger import get_logger
-from observability.langfuse_setup import flush_langfuse, get_langfuse_config
+from observability.langfuse_setup import get_langfuse_config, shutdown_langfuse, trace_turn
 
 logger = get_logger(__name__)
 
@@ -136,6 +136,7 @@ async def on_app_startup():
 @cl.on_app_shutdown
 async def on_app_shutdown():
     await _stack.aclose()
+    shutdown_langfuse()
 
 
 def _graph_tid() -> str:
@@ -174,11 +175,17 @@ async def _ask(payload: dict) -> str | None:
             f"**Question {payload['index']}/{payload['total']}** "
             f"[{payload.get('difficulty', 'medium')}]\n\n{payload['question']}"
         )
-        reply = await cl.AskUserMessage(content=content, timeout=ASK_TIMEOUT_SECONDS).send()
-        return reply["output"].strip() if reply else None  # type: ignore
-    else:
-        raw = payload.get("roadmap")
-        roadmap = StudyRoadmap.from_dict(raw) if isinstance(raw, dict) else raw  # type: ignore
+
+        async def ask_question():
+            reply = await cl.AskUserMessage(content=content, timeout=ASK_TIMEOUT_SECONDS).send()
+            return reply["output"].strip() if reply else None  # type: ignore
+
+        return await _ask_surviving_reconnects(ask_question)
+
+    raw = payload.get("roadmap")
+    roadmap = StudyRoadmap.from_dict(raw) if isinstance(raw, dict) else raw  # type: ignore
+
+    async def ask_approval():
         # Sent as its own message: AskActionMessage replaces its text with "Selected: ..." after a click,
         # which would otherwise erase the roadmap from the chat.
         if roadmap:
@@ -192,6 +199,29 @@ async def _ask(payload: dict) -> str | None:
             timeout=ASK_TIMEOUT_SECONDS,
         ).send()
         return choice["payload"]["value"] if choice else None
+
+    return await _ask_surviving_reconnects(ask_approval)
+
+
+async def _ask_surviving_reconnects(ask):
+    """Run `ask()`, re-asking if the socket reconnects (Chainlit drops an open ask on reconnect)."""
+    session = cl.context.session
+    while True:
+        socket_id = session.socket_id
+        task = asyncio.create_task(ask())
+        try:
+            while not task.done() and session.socket_id == socket_id:
+                await asyncio.wait({task}, timeout=1)
+            if task.done():
+                return task.result()
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.warning("[Chainlit] Socket reconnected while waiting for an answer: asking again")
 
 
 STAGE_DONE = {
@@ -238,7 +268,33 @@ DISPLAYED = {
 }
 
 
-async def _run(graph_input) -> dict:
+def _describe_interrupt(payload: dict) -> str:
+    """The pending question as plain text, for the trace output."""
+    if payload.get("type") == "quiz_question":
+        return f"Question {payload['index']}/{payload['total']}: {payload['question']}"
+    return "Asked to approve the proposed study plan."
+
+
+async def _run(graph_input, *, turn: str, user_input: str | None) -> dict:
+    """One graph run, traced as a `coach-turn`: input = what the user sent, output = what they were shown."""
+    shown: list[str] = []
+    with trace_turn(
+        turn=turn,
+        session_id=_graph_tid(),
+        user_id=_user_id(),
+        input=user_input,
+        chat_id=cl.context.session.thread_id,
+    ) as root:
+        result = await _run_graph(graph_input, shown)
+        if "__interrupt__" in result:
+            shown.append(_describe_interrupt(result["__interrupt__"][0].value))
+        elif result.get("error"):
+            shown.append(f"Error: {result['error']}")
+        root.update(output="\n\n".join(shown) or None)
+    return result
+
+
+async def _run_graph(graph_input, shown: list[str]) -> dict:
     """Run the graph until it finishes or hits an interrupt.
 
     Shows a spinner step that lists each stage as it completes. Returns the same shape
@@ -286,9 +342,11 @@ async def _run(graph_input) -> dict:
                         if node == "explainer" and live is not None:
                             live.content = fmt(value[key])  # swap in the final text with its topic header
                             await live.update()
+                            shown.append(live.content)
                             live = None
                         else:
                             posts.append(fmt(value[key]))
+                            shown.append(posts[-1])
 
     await flush_posts()
 
@@ -299,7 +357,10 @@ async def _run(graph_input) -> dict:
 
 async def _drive(graph_input) -> None:
     """Run the graph, answering each interrupt through the chat until it finishes."""
-    result = await _run(graph_input)
+    if graph_input is None:
+        result = await _run(None, turn="resume-chat", user_input=None)
+    else:
+        result = await _run(graph_input, turn="start-goal", user_input=graph_input.get("goal"))
 
     while "__interrupt__" in result:
         answer = await _ask(result["__interrupt__"][0].value)
@@ -308,13 +369,12 @@ async def _drive(graph_input) -> None:
             return
         # Fresh config per run (fresh Langfuse handler): each run happens in its own async context, and reusing a
         # handler across interrupt resumes breaks OTel context detach.
-        result = await _run(Command(resume=answer))
+        result = await _run(Command(resume=answer), turn="answer", user_input=answer)
 
     if result.get("error"):
         await cl.Message(f"**Error:** {result['error']}").send()
     else:
         await cl.Message("Session finished.").send()
-    flush_langfuse()
 
 
 # user identifier -> callable that stops that user's running session (used by POST /stop-session).
@@ -351,7 +411,6 @@ async def _run_stoppable(graph_input) -> None:
     finally:
         if _STOPPERS.get(uid) is stop:
             del _STOPPERS[uid]
-        flush_langfuse()
 
 
 async def _session(goal: str | None = None) -> None:

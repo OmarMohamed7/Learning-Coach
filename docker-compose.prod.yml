@@ -18,7 +18,8 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       CHECKPOINT_DB: data/checkpoints.db
       NOTES_PATH: study_materials/sample_notes
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://us.cloud.langfuse.com}
+      LANGFUSE_TRACING_ENVIRONMENT: production
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       # Quiz A2A service and CrewAI study buddy are not deployed: the in-process paths are used instead.
@@ -29,7 +30,7 @@ services:
       MCP_FILESYSTEM_URL: http://file-server-mcp:8001/mcp
       MCP_MEMORY_URL: http://memory-server-mcp:8002/mcp
       CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET:?set CHAINLIT_AUTH_SECRET}
-      DAILY_GOAL_LIMIT: ${DAILY_GOAL_LIMIT:-5}
+      DAILY_GOAL_LIMIT: ${DAILY_GOAL_LIMIT:-2}
       LOG_LEVEL: INFO
     depends_on: [file-server-mcp, memory-server-mcp]
     restart: unless-stopped

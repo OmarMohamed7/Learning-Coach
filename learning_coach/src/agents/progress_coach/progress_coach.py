@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 def get_coaching_message(topic: str, score: float, weak_areas: list[str]) -> dict:
     """Ask the LLM for a personalised coaching message."""
-    llm = get_llm(temperature=0.4, json_mode=True)
+    llm = get_llm(temperature=0.4, json_mode=True, name="review-progress")
     context = {
         "topic":         topic,
         "score_percent": f"{score:.0%}",

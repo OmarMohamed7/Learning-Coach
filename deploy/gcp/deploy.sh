@@ -106,7 +106,7 @@ step "Deploying app (public)"
 ENV_PAIRS=()
 # Adds KEY=VALUE, skipping empty values so the app's own defaults apply.
 add_env() { [[ -n "$2" ]] && ENV_PAIRS+=("$1=$2") || true; }
-for key in LLM_PROVIDER FALLBACK_LLM_PROVIDER OLLAMA_BASE_URL OLLAMA_MODEL GROQ_MODEL LANGFUSE_HOST; do
+for key in LLM_PROVIDER FALLBACK_LLM_PROVIDER OLLAMA_BASE_URL OLLAMA_MODEL GROQ_MODEL LANGFUSE_BASE_URL; do
   add_env "$key" "$(env_val "$key")"
 done
 add_env DAILY_GOAL_LIMIT "${DAILY_GOAL_LIMIT:-$(env_val DAILY_GOAL_LIMIT)}"
@@ -118,6 +118,7 @@ add_env USE_A2A_QUIZ false;  add_env QUIZ_SERVICE_URL http://unused:9001
 add_env USE_STUDY_BUDDY false; add_env STUDY_BUDDY_URL http://unused:9002
 add_env CHECKPOINT_DB data/checkpoints.db
 add_env NOTES_PATH study_materials/sample_notes
+add_env LANGFUSE_TRACING_ENVIRONMENT production
 add_env LOG_LEVEL INFO
 # '^|^' makes '|' the separator, so values may contain commas.
 ENV_VARS="^|^$(IFS='|'; echo "${ENV_PAIRS[*]}")"

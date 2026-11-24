@@ -23,6 +23,6 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH="/app/learning_coach" \
     MCP_FILESYSTEM_URL=http://127.0.0.1:8001/mcp MCP_MEMORY_URL=http://127.0.0.1:8002/mcp \
     NOTES_PATH=study_materials/sample_notes CHECKPOINT_DB=data/checkpoints.db \
     USE_A2A_QUIZ=false USE_STUDY_BUDDY=false QUIZ_SERVICE_URL=http://unused:9001 STUDY_BUDDY_URL=http://unused:9002 \
-    LANGFUSE_HOST=https://us.cloud.langfuse.com DAILY_GOAL_LIMIT=5 LOG_LEVEL=INFO
+    LANGFUSE_BASE_URL=https://us.cloud.langfuse.com LANGFUSE_TRACING_ENVIRONMENT=production DAILY_GOAL_LIMIT=2 LOG_LEVEL=INFO
 
 CMD ["/app/start.sh"]

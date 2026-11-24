@@ -21,11 +21,7 @@ _tools_cache: list[BaseTool] | None = None
 
 
 class GoogleIdTokenAuth(httpx.Auth):
-    """Adds a Google-signed ID token to each request, so a private Cloud Run service lets it in.
-
-    The token is minted for the service's base URL (its audience) from the runtime service account,
-    and refreshed shortly before its one-hour expiry.
-    """
+    """Google ID token auth for private Cloud Run services (refreshed before its 1h expiry)."""
 
     def __init__(self, url: str):
         parts = urlsplit(url)
@@ -54,7 +50,6 @@ class GoogleIdTokenAuth(httpx.Auth):
 
 def _server(url: str) -> dict:
     conn: dict = {"transport": "streamable_http", "url": url}
-    # On Cloud Run the MCP services are private (no unauthenticated access): MCP_AUTH=google turns on ID tokens.
     if os.getenv("MCP_AUTH", "").lower() == "google":
         conn["auth"] = GoogleIdTokenAuth(url)
     return conn

@@ -154,4 +154,4 @@ Return ONLY the final JSON object.
 
 
 def build_planner_llm():
-    return get_llm(temperature=0.1, json_mode=True)
+    return get_llm(temperature=0.1, json_mode=True, name="plan-roadmap")

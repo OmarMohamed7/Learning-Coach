@@ -58,7 +58,8 @@ class Settings(BaseModel):
             notes_path=Path(os.environ["NOTES_PATH"]),
             langfuse_public_key=os.environ.get("LANGFUSE_PUBLIC_KEY") or None,
             langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY") or None,
-            langfuse_host=os.environ["LANGFUSE_HOST"],
+            # The Langfuse SDK reads LANGFUSE_BASE_URL (LANGFUSE_HOST is its legacy name).
+            langfuse_host=os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST") or "https://cloud.langfuse.com",
             quiz_service_url=os.environ["QUIZ_SERVICE_URL"],
             study_buddy_url=os.environ["STUDY_BUDDY_URL"],
             use_a2a_quiz=_as_bool(os.environ["USE_A2A_QUIZ"]),

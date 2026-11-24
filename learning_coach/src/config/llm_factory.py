@@ -102,29 +102,20 @@ def _build_llm(provider: str, temperature: float, json_mode: bool):
     return ChatOllama(**kwargs)
 
 
-def get_llm(temperature: float = 0.1, json_mode: bool = False, tools=None):
-    """Return a chat model for the configured LLM_PROVIDER.
+def get_llm(temperature: float = 0.1, json_mode: bool = False, tools=None, name: str | None = None):
+    """Return a chat model for LLM_PROVIDER, with FALLBACK_LLM_PROVIDER as fallback if set.
 
-    json_mode maps to Ollama's native format='json'. Claude has no
-    equivalent flag — its agents rely on the system prompt's existing
-    "return ONLY valid JSON" instruction instead.
-
-    If FALLBACK_LLM_PROVIDER is set (e.g. "groq"), the primary model is
-    wrapped in LangChain's with_fallbacks: any error (rate limit, quota,
-    downtime) on the primary is retried with the fallback provider.
+    `name` becomes the run (and Langfuse generation) name, e.g. "grade-answer".
     """
-    primary = _build_llm(LLM_PROVIDER, temperature, json_mode)
-    if tools:
-        primary = primary.bind_tools(tools)
-    fallback_provider = os.getenv("FALLBACK_LLM_PROVIDER", "").lower()
-    if fallback_provider and fallback_provider != LLM_PROVIDER:
-        if fallback_provider not in _VALID_PROVIDERS:
-            raise ValueError(
-                f"Unknown FALLBACK_LLM_PROVIDER: {fallback_provider!r} "
-                f"(expected one of {_VALID_PROVIDERS})"
-            )
-        fallback = _build_llm(fallback_provider, temperature, json_mode)
+    def finish(llm):
         if tools:
-            fallback = fallback.bind_tools(tools)
-        return primary.with_fallbacks([fallback])
-    return primary
+            llm = llm.bind_tools(tools)
+        return llm.with_config(run_name=name) if name else llm
+
+    primary = finish(_build_llm(LLM_PROVIDER, temperature, json_mode))
+    fallback_provider = os.getenv("FALLBACK_LLM_PROVIDER", "").lower()
+    if not fallback_provider or fallback_provider == LLM_PROVIDER:
+        return primary
+    if fallback_provider not in _VALID_PROVIDERS:
+        raise ValueError(f"Unknown FALLBACK_LLM_PROVIDER: {fallback_provider!r} (expected one of {_VALID_PROVIDERS})")
+    return primary.with_fallbacks([finish(_build_llm(fallback_provider, temperature, json_mode))])

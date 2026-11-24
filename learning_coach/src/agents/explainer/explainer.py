@@ -103,7 +103,7 @@ STREAM_TAG = "stream_explanation"
 
 
 def _writer_llm(stream: bool):
-  llm = get_llm(temperature=0.3)
+  llm = get_llm(temperature=0.3, name="write-explanation")
   return llm.with_config(tags=[STREAM_TAG]) if stream else llm
 
 
@@ -162,7 +162,7 @@ async def _explain_topic(topic, session_id: str, tools: dict, stream: bool = Fal
   UI shows the explanation as it is written), or as a background prefetch for the next one (stream=False,
   so its tokens never appear while the student is still on the current topic).
   """
-  llm = get_llm(temperature=0.3, tools=list(tools.values()))
+  llm = get_llm(temperature=0.3, tools=list(tools.values()), name="research-notes")
   
   messages = [
     SystemMessage(content= EXPLAINER_SYSTEM_PROMPT),
