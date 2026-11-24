@@ -103,6 +103,7 @@ def model_choices() -> list[ModelChoice]:
         ModelChoice("ollama", "gpt-oss:120b"),
         ModelChoice("ollama", "gpt-oss:20b"),
         ModelChoice("groq", _default_model("groq")),
+        ModelChoice("groq", "openai/gpt-oss-20b"),
         ModelChoice("custom", _default_model("custom")),
     ]
     seen, out = set(), []
@@ -184,16 +185,20 @@ def get_llm(temperature: float = 0.1, json_mode: bool = False, tools=None, name:
 
     choice = current_choice()
     primary = finish(_build_llm(choice.provider, temperature, json_mode, choice.model, choice.base_url or None))
-    fallback = next(
+
+    fallbacks = []
+    if choice.provider != "custom" and _default_model(choice.provider) != choice.model:
+        fallbacks.append(finish(_build_llm(choice.provider, temperature, json_mode), is_fallback=True))  # same provider, default model
+    other = next(
         (p for p in (os.getenv("FALLBACK_LLM_PROVIDER", "").lower(), LLM_PROVIDER)
          if p and p != choice.provider and _has_key(p)),
         None,
     )
-    if fallback is None:
-        return primary
-    if fallback not in _VALID_PROVIDERS:
-        raise ValueError(f"Unknown FALLBACK_LLM_PROVIDER: {fallback!r} (expected one of {_VALID_PROVIDERS})")
-    return primary.with_fallbacks([finish(_build_llm(fallback, temperature, json_mode), is_fallback=True)])
+    if other is not None:
+        if other not in _VALID_PROVIDERS:
+            raise ValueError(f"Unknown FALLBACK_LLM_PROVIDER: {other!r} (expected one of {_VALID_PROVIDERS})")
+        fallbacks.append(finish(_build_llm(other, temperature, json_mode), is_fallback=True))
+    return primary.with_fallbacks(fallbacks) if fallbacks else primary
 
 
 class FallbackWatcher(BaseCallbackHandler):
