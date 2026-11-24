@@ -27,7 +27,10 @@ def format_roadmap(roadmap: StudyRoadmap) -> str:
 
 
 def format_explanation(explanation: dict) -> str:
-    return f"### 📘 Topic {explanation['index']}/{explanation['total']}: {explanation['topic']}\n\n{explanation['text']}"
+    text = f"### 📘 Topic {explanation['index']}/{explanation['total']}: {explanation['topic']}\n\n{explanation['text']}"
+    if not explanation.get("from_notes", True):
+        text += "\n\n---\n_ℹ️ None of your study notes matched this topic, so it was explained from general knowledge._"
+    return text
 
 
 def format_grade(grade: dict) -> str:

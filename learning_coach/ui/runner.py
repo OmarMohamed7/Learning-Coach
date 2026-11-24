@@ -14,9 +14,11 @@ from observability.langfuse_setup import get_langfuse_config, trace_turn
 from ui.asks import ask
 from ui.model_picker import selected_choice
 from ui.formatting import DISPLAYED, STAGE_DONE, describe_interrupt
+from logger import get_logger
 from ui.logs import tag_logs
 from ui.session import graph_tid, user_id
 
+logger = get_logger(__name__)
 _graph = None
 _STOPPERS: dict[str, Callable[[], bool]] = {}  # user id -> stops that user's running session
 
@@ -109,6 +111,19 @@ async def _run_graph(graph_input, shown: list[str]) -> dict:
 
 async def _drive(graph_input) -> None:
     """Run the graph, answering each interrupt through the chat until it finishes."""
+    try:
+        await _drive_graph(graph_input)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.exception("[Runner] Study session crashed")
+        await cl.Message(
+            f"❌ Something went wrong: **{type(e).__name__}: {e}**\n\nSee the **Logs** button for details, "
+            "then type a new topic to start again."
+        ).send()
+
+
+async def _drive_graph(graph_input) -> None:
     if graph_input is None:
         result = await _run(None, turn="resume-chat", user_input=None)
     else:

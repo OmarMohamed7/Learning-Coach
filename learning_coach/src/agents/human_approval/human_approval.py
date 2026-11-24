@@ -80,6 +80,7 @@ def choose_next_step_node(state: dict) -> dict:
     topics = roadmap.topics if roadmap else []
     has_next = idx + 1 < len(topics)
 
+    logger.info(f"[Next Step] Explanation finished for '{topics[idx].title if idx < len(topics) else '?'}': asking quiz or next topic")
     choice = interrupt({
         "type": "next_step",
         "topic": topics[idx].title if idx < len(topics) else "",
@@ -87,6 +88,7 @@ def choose_next_step_node(state: dict) -> dict:
     })
 
     if str(choice).lower().strip() == "quiz":
+        logger.info("[Next Step] Taking the quiz")
         return {"skip_quiz": False}
     logger.info("[Next Step] Quiz skipped")
     return {"skip_quiz": True, "current_topic_index": idx + 1}

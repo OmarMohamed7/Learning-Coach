@@ -49,9 +49,10 @@ Write in Markdown, roughly 500-800 words, with these sections:
 - **Overview**: what the topic is and why it matters (2-3 sentences)
 - **Analogy**: a real-world analogy that makes it intuitive
 - **Core concepts**: walk through the key ideas step by step, each with a short explanation
-- **Examples**: 2-3 code examples of increasing difficulty, taken from the student's notes when possible.
-  Put each in a fenced code block, comment the important lines, and show the expected output
-- **Common mistakes**: 2-3 gotchas, each with a short wrong-vs-right snippet
+- **Examples**: 2-3 examples of increasing difficulty, taken from the student's notes when possible.
+  For programming topics use fenced code blocks, comment the important lines, and show the expected output.
+  For any other subject (languages, science, history...) use worked examples in that subject. Never add code
+- **Common mistakes**: 2-3 gotchas, each with a short wrong-vs-right example
 - **Key takeaways**: 3-5 bullet points to remember
 """
 
@@ -93,9 +94,10 @@ async def execute_tool_call(tool_call: dict, tools: dict) -> str:
 
 
 GENERAL_EXPLANATION_PROMPT = """You are an expert tutor. Write a detailed Markdown explanation of the topic below
-for a student. Use these sections: Overview, Analogy, Core concepts, Examples (2-3 code examples of increasing
-difficulty in fenced code blocks, with comments and expected output), Common mistakes (2-3, each with a
-wrong-vs-right snippet), Key takeaways (3-5 bullets). Aim for roughly 500-800 words."""
+for a student. Use these sections: Overview, Analogy, Core concepts, Examples (2-3 examples of increasing
+difficulty: fenced code blocks with comments and expected output for programming topics, worked examples in the
+subject itself for anything else; never add code to a non-programming topic), Common mistakes (2-3, each with a
+wrong-vs-right example), Key takeaways (3-5 bullets). Aim for roughly 500-800 words."""
 
 
 # Tag on the LLM call whose tokens the UI shows live (see _run in main.py).
@@ -228,11 +230,15 @@ async def _explain_topic(topic, session_id: str, tools: dict, stream: bool = Fal
     logger.info(f"[Explainer] Writing explanation from {len(notes)} characters of notes")
     explanation = await _write_explanation(topic.title, topic.description, notes, stream)
   else:
-    logger.error(
-        f"[Explainer] No study notes were read for '{topic.title}' "
-        f"(final_res={'set' if final_res is not None else 'none'} after {max_iteration} iteration cap). "
-        "Falling back to a general explanation and continuing to the quiz."
-    )
+    if final_res is None:
+      logger.error(
+          f"[Explainer] Gave up gathering notes for '{topic.title}' after {max_iteration} LLM calls "
+          "without finishing. Falling back to a general explanation."
+      )
+    else:
+      logger.warning(
+          f"[Explainer] No study notes matched '{topic.title}'. Writing it from general knowledge."
+      )
     # TODO(no-materials fallback): write the generated explanation to disk as a new study-material
     # file (e.g. f"{state['study_materials_path']}/{topic.title.lower().replace(' ', '_')}.md") via a
     # `write_study_file`-style MCP tool, so next time search_notes() finds it and grounds normally.
