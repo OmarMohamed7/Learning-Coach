@@ -72,3 +72,21 @@ def human_approval_node(state: dict) -> dict:
         "error":                None,
         
     }
+
+def choose_next_step_node(state: dict) -> dict:
+    """After an explanation, ask whether to take the quiz or move on to the next topic."""
+    roadmap: StudyRoadmap | None = state.get("roadmap")
+    idx = state.get("current_topic_index", 0)
+    topics = roadmap.topics if roadmap else []
+    has_next = idx + 1 < len(topics)
+
+    choice = interrupt({
+        "type": "next_step",
+        "topic": topics[idx].title if idx < len(topics) else "",
+        "has_next": has_next,
+    })
+
+    if str(choice).lower().strip() == "quiz":
+        return {"skip_quiz": False}
+    logger.info("[Next Step] Quiz skipped")
+    return {"skip_quiz": True, "current_topic_index": idx + 1}

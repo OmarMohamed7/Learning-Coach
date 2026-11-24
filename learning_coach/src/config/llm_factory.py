@@ -10,7 +10,10 @@ agent code again.
 """
 
 import os
+from contextvars import ContextVar
+from dataclasses import dataclass
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_ollama import ChatOllama
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
@@ -50,32 +53,90 @@ _OPENAI_COMPAT = {
 }
 
 
-def get_model_name() -> str:
-    """Return the effective model ID for the configured provider."""
-    if LLM_PROVIDER == "claude":
+def _default_model(provider: str) -> str:
+    if provider == "claude":
         return CLAUDE_MODEL
-    if LLM_PROVIDER in _OPENAI_COMPAT:
-        _, _, model_var, default_model = _OPENAI_COMPAT[LLM_PROVIDER]
+    if provider in _OPENAI_COMPAT:
+        _, _, model_var, default_model = _OPENAI_COMPAT[provider]
         return os.getenv(model_var, default_model)
     return OLLAMA_MODEL
 
 
 _VALID_PROVIDERS = (*_OPENAI_COMPAT.keys(), "claude", "ollama")
+_PROVIDER_LABELS = {"ollama": "Ollama Cloud", "groq": "Groq"}
+_API_KEY_VARS = {"ollama": "OLLAMA_API_KEY", "groq": "GROQ_API_KEY"}
 
 
-def _build_llm(provider: str, temperature: float, json_mode: bool):
+@dataclass(frozen=True)
+class ModelChoice:
+    provider: str
+    model: str
+
+    @property
+    def label(self) -> str:
+        return f"{_PROVIDER_LABELS.get(self.provider, self.provider)} · {self.model}"
+
+
+def _has_key(provider: str) -> bool:
+    var = _API_KEY_VARS.get(provider)
+    return not var or bool(os.getenv(var, "").strip())
+
+
+def _env_choice() -> ModelChoice:
+    return ModelChoice(LLM_PROVIDER, _default_model(LLM_PROVIDER))
+
+
+def default_choice() -> ModelChoice:
+    """The .env model if its provider has a key, otherwise the first model that does."""
+    return model_choices()[0]
+
+
+def model_choices() -> list[ModelChoice]:
+    """Models offered in the UI picker: the configured default first, then any with an API key set."""
+    candidates = [
+        _env_choice(),
+        ModelChoice("ollama", "gpt-oss:120b"),
+        ModelChoice("ollama", "gpt-oss:20b"),
+        ModelChoice("groq", _default_model("groq")),
+    ]
+    seen, out = set(), []
+    for c in candidates:
+        if c not in seen and _has_key(c.provider):
+            seen.add(c)
+            out.append(c)
+    return out or [_env_choice()]
+
+
+_selected: ContextVar[ModelChoice | None] = ContextVar("selected_model", default=None)
+
+
+def use_model(choice: ModelChoice | None) -> None:
+    """Select the model for the current context (one chat session); None means the .env default."""
+    _selected.set(choice)
+
+
+def current_choice() -> ModelChoice:
+    return _selected.get() or default_choice()
+
+
+def get_model_name() -> str:
+    return current_choice().model
+
+
+def _build_llm(provider: str, temperature: float, json_mode: bool, model: str | None = None):
     """Instantiate the chat model for one provider."""
+    model = model or _default_model(provider)
     if provider == "claude":
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model_name=CLAUDE_MODEL, temperature=temperature, timeout=None, stop=None)
+        return ChatAnthropic(model_name=model, temperature=temperature, timeout=None, stop=None)
 
     if provider in _OPENAI_COMPAT:
         from langchain_openai import ChatOpenAI
 
         base_url, key_var, model_var, default_model = _OPENAI_COMPAT[provider]
         kwargs = {
-            "model": os.getenv(model_var, default_model),
+            "model": model,
             "base_url": base_url,
             "api_key": os.environ[key_var],
             "temperature": temperature,
@@ -94,7 +155,7 @@ def _build_llm(provider: str, temperature: float, json_mode: bool):
             f"(expected 'ollama', 'claude', 'gemini', 'groq', 'opencode' or 'openrouter')"
         )
 
-    kwargs = {"model": OLLAMA_MODEL, "base_url": OLLAMA_BASE_URL, "temperature": temperature}
+    kwargs = {"model": model, "base_url": OLLAMA_BASE_URL, "temperature": temperature}
     if OLLAMA_API_KEY:
         kwargs["client_kwargs"] = {"headers": {"Authorization": f"Bearer {OLLAMA_API_KEY}"}}
     if json_mode:
@@ -103,19 +164,39 @@ def _build_llm(provider: str, temperature: float, json_mode: bool):
 
 
 def get_llm(temperature: float = 0.1, json_mode: bool = False, tools=None, name: str | None = None):
-    """Return a chat model for LLM_PROVIDER, with FALLBACK_LLM_PROVIDER as fallback if set.
+    """Chat model for the selected model, falling back to another provider that has a key.
 
     `name` becomes the run (and Langfuse generation) name, e.g. "grade-answer".
     """
-    def finish(llm):
+    def finish(llm, is_fallback: bool = False):
         if tools:
             llm = llm.bind_tools(tools)
-        return llm.with_config(run_name=name) if name else llm
+        config = {"metadata": {"llm_fallback": is_fallback}}
+        if name:
+            config["run_name"] = name
+        return llm.with_config(**config)
 
-    primary = finish(_build_llm(LLM_PROVIDER, temperature, json_mode))
-    fallback_provider = os.getenv("FALLBACK_LLM_PROVIDER", "").lower()
-    if not fallback_provider or fallback_provider == LLM_PROVIDER:
+    choice = current_choice()
+    primary = finish(_build_llm(choice.provider, temperature, json_mode, choice.model))
+    fallback = next(
+        (p for p in (os.getenv("FALLBACK_LLM_PROVIDER", "").lower(), LLM_PROVIDER)
+         if p and p != choice.provider and _has_key(p)),
+        None,
+    )
+    if fallback is None:
         return primary
-    if fallback_provider not in _VALID_PROVIDERS:
-        raise ValueError(f"Unknown FALLBACK_LLM_PROVIDER: {fallback_provider!r} (expected one of {_VALID_PROVIDERS})")
-    return primary.with_fallbacks([finish(_build_llm(fallback_provider, temperature, json_mode))])
+    if fallback not in _VALID_PROVIDERS:
+        raise ValueError(f"Unknown FALLBACK_LLM_PROVIDER: {fallback!r} (expected one of {_VALID_PROVIDERS})")
+    return primary.with_fallbacks([finish(_build_llm(fallback, temperature, json_mode), is_fallback=True)])
+
+
+class FallbackWatcher(BaseCallbackHandler):
+    """Records which fallback model answered during a run, so the UI can say so."""
+
+    def __init__(self):
+        self.used: set[str] = set()
+
+    def on_chat_model_start(self, serialized, messages, *, metadata=None, **kwargs):
+        if (metadata or {}).get("llm_fallback"):
+            params = kwargs.get("invocation_params") or {}
+            self.used.add(params.get("model") or params.get("model_name") or "fallback model")

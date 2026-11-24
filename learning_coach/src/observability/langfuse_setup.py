@@ -5,7 +5,7 @@ from typing import Any, Generator
 
 from logger import get_logger
 
-from config.llm_factory import LLM_PROVIDER, get_model_name
+from config.llm_factory import current_choice
 
 logger = get_logger(__name__)
 
@@ -47,9 +47,8 @@ def trace_turn(
             metadata={
                 "turn": turn,
                 "chat_id": chat_id or "",
-                "llm_provider": LLM_PROVIDER,
-                "llm_model": get_model_name(),
-                "fallback_provider": os.getenv("FALLBACK_LLM_PROVIDER", ""),
+                "llm_provider": current_choice().provider,
+                "llm_model": current_choice().model,
             },
         ):
             yield root

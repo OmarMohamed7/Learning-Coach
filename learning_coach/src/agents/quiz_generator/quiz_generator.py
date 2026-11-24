@@ -133,6 +133,9 @@ def quiz_generator_node(state: dict) -> dict:
     }
 
 
+REVEAL_ANSWER_BELOW = 0.5  # show the correct answer when a score is under 50%
+
+
 def quiz_question_node(state: dict) -> dict:
     """
     Langgraph node: Quiz Question
@@ -202,6 +205,7 @@ def quiz_question_node(state: dict) -> dict:
         "score": score,
         "correct": correct,
         "feedback": feedback,
+        "correct_answer": expected if score < REVEAL_ANSWER_BELOW else None,
     }
 
     if len(answers) < len(questions):
