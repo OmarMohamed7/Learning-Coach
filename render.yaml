@@ -1,0 +1,26 @@
+# Render Blueprint: New → Blueprint → pick this repo. Creates the Learning Coach web service (Docker, free plan).
+# Secrets marked sync: false are asked for once in the dashboard and never stored in the repo.
+services:
+  - type: web
+    name: learning-coach
+    runtime: docker
+    plan: free
+    region: frankfurt            # closest to Supabase eu-west-1 (Ireland)
+    branch: main
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL        # Supabase session pooler URL, with the real password
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CHAINLIT_AUTH_SECRET
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
