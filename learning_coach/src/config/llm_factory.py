@@ -50,6 +50,8 @@ _OPENAI_COMPAT = {
         "OPENROUTER_MODEL",
         "openai/gpt-4o-mini",
     ),
+    # Any OpenAI-compatible endpoint (vLLM, LM Studio, a gateway...), set through CUSTOM_LLM_* env vars.
+    "custom": (os.getenv("CUSTOM_LLM_BASE_URL", "").strip(), "CUSTOM_LLM_API_KEY", "CUSTOM_LLM_MODEL", ""),
 }
 
 
@@ -63,7 +65,7 @@ def _default_model(provider: str) -> str:
 
 
 _VALID_PROVIDERS = (*_OPENAI_COMPAT.keys(), "claude", "ollama")
-_PROVIDER_LABELS = {"ollama": "Ollama Cloud", "groq": "Groq"}
+_PROVIDER_LABELS = {"ollama": "Ollama Cloud", "groq": "Groq", "custom": "Custom"}
 _API_KEY_VARS = {"ollama": "OLLAMA_API_KEY", "groq": "GROQ_API_KEY"}
 
 
@@ -71,6 +73,7 @@ _API_KEY_VARS = {"ollama": "OLLAMA_API_KEY", "groq": "GROQ_API_KEY"}
 class ModelChoice:
     provider: str
     model: str
+    base_url: str = ""  # only for a custom endpoint entered in the UI; empty means use the env/default URL
 
     @property
     def label(self) -> str:
@@ -78,6 +81,8 @@ class ModelChoice:
 
 
 def _has_key(provider: str) -> bool:
+    if provider == "custom":
+        return bool(_OPENAI_COMPAT["custom"][0] and _default_model("custom"))
     var = _API_KEY_VARS.get(provider)
     return not var or bool(os.getenv(var, "").strip())
 
@@ -98,6 +103,7 @@ def model_choices() -> list[ModelChoice]:
         ModelChoice("ollama", "gpt-oss:120b"),
         ModelChoice("ollama", "gpt-oss:20b"),
         ModelChoice("groq", _default_model("groq")),
+        ModelChoice("custom", _default_model("custom")),
     ]
     seen, out = set(), []
     for c in candidates:
@@ -123,7 +129,7 @@ def get_model_name() -> str:
     return current_choice().model
 
 
-def _build_llm(provider: str, temperature: float, json_mode: bool, model: str | None = None):
+def _build_llm(provider: str, temperature: float, json_mode: bool, model: str | None = None, base_url: str | None = None):
     """Instantiate the chat model for one provider."""
     model = model or _default_model(provider)
     if provider == "claude":
@@ -134,11 +140,11 @@ def _build_llm(provider: str, temperature: float, json_mode: bool, model: str | 
     if provider in _OPENAI_COMPAT:
         from langchain_openai import ChatOpenAI
 
-        base_url, key_var, model_var, default_model = _OPENAI_COMPAT[provider]
+        default_url, key_var, _, _ = _OPENAI_COMPAT[provider]
         kwargs = {
             "model": model,
-            "base_url": base_url,
-            "api_key": os.environ[key_var],
+            "base_url": base_url or default_url,
+            "api_key": os.environ.get(key_var) or "not-needed" if provider == "custom" else os.environ[key_var],
             "temperature": temperature,
             "max_retries": 5,
         }
@@ -177,7 +183,7 @@ def get_llm(temperature: float = 0.1, json_mode: bool = False, tools=None, name:
         return llm.with_config(**config)
 
     choice = current_choice()
-    primary = finish(_build_llm(choice.provider, temperature, json_mode, choice.model))
+    primary = finish(_build_llm(choice.provider, temperature, json_mode, choice.model, choice.base_url or None))
     fallback = next(
         (p for p in (os.getenv("FALLBACK_LLM_PROVIDER", "").lower(), LLM_PROVIDER)
          if p and p != choice.provider and _has_key(p)),

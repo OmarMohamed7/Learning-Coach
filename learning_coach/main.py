@@ -24,7 +24,8 @@ from graph.state import initial_state
 from logger import get_logger
 from observability.langfuse_setup import shutdown_langfuse
 from ui.asks import ASK_TIMEOUT_SECONDS
-from ui.model_picker import apply_model_setting, send_model_picker
+from ui.logs import install as install_logs, register_logs_route
+from ui.model_picker import apply_model_setting, selected_choice, send_model_picker
 from ui.runner import is_running, register_stop_route, run_stoppable, set_graph
 from ui.session import graph_tid, user_id
 from ui.startup import startup
@@ -34,6 +35,8 @@ logger = get_logger(__name__)
 
 _stack = AsyncExitStack()
 register_stop_route()
+register_logs_route()
+install_logs()
 
 
 @cl.data_layer
@@ -91,7 +94,7 @@ async def _session(goal: str | None = None) -> None:
         first_goal = cl.user_session.get("graph_tid") is None
         cl.user_session.set("graph_tid", chat_id if first_goal else f"{chat_id}:{uuid.uuid4().hex[:8]}")
 
-        use_model(cl.user_session.get("model_choice"))
+        use_model(selected_choice())
         await cl.Message(
             f"Starting: **{goal}** _({remaining} of {DAILY_GOAL_LIMIT} goals left today · {current_choice().label})_"
         ).send()

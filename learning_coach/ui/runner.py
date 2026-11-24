@@ -12,7 +12,9 @@ from agents.explainer.explainer import STREAM_TAG
 from config.llm_factory import FallbackWatcher, current_choice, use_model
 from observability.langfuse_setup import get_langfuse_config, trace_turn
 from ui.asks import ask
+from ui.model_picker import selected_choice
 from ui.formatting import DISPLAYED, STAGE_DONE, describe_interrupt
+from ui.logs import tag_logs
 from ui.session import graph_tid, user_id
 
 _graph = None
@@ -30,7 +32,7 @@ def is_running(uid: str) -> bool:
 
 async def _run(graph_input, *, turn: str, user_input: str | None) -> dict:
     """One graph run, traced as a `coach-turn`: input = what the user sent, output = what they were shown."""
-    use_model(cl.user_session.get("model_choice"))
+    use_model(selected_choice())
     shown: list[str] = []
     with trace_turn(
         turn=turn, session_id=graph_tid(), user_id=user_id(), input=user_input, chat_id=cl.context.session.thread_id
@@ -127,9 +129,10 @@ async def _drive(graph_input) -> None:
 
 async def run_stoppable(graph_input) -> None:
     """Drive the graph in its own task so Stop can cancel it, even while it waits for an answer."""
+    uid = user_id()
+    tag_logs(uid)
     task = asyncio.create_task(_drive(graph_input))
     stopped = False
-    uid = user_id()
 
     def stop() -> bool:
         nonlocal stopped
@@ -157,10 +160,16 @@ async def _stop_session(user=Depends(get_current_user)):
     return {"stopped": bool(stop and stop())}
 
 
+async def _session_active(user=Depends(get_current_user)):
+    """Polled by public/custom.js: the Stop button is only shown while a session is running."""
+    return {"active": (user.identifier if user else "anonymous") in _STOPPERS}
+
+
 def register_stop_route() -> None:
     # Chainlit's catch-all route is already registered; ours must sit in front of it.
     before = len(chainlit_server.router.routes)
     chainlit_server.add_api_route("/stop-session", _stop_session, methods=["POST"], include_in_schema=False)
+    chainlit_server.add_api_route("/session-active", _session_active, methods=["GET"], include_in_schema=False)
     ours = chainlit_server.router.routes[before:]
     del chainlit_server.router.routes[before:]
     chainlit_server.router.routes[0:0] = ours
