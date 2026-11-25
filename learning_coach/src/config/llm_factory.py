@@ -110,7 +110,7 @@ def _has_key(provider: str) -> bool:
 
 
 def _env_choice() -> ModelChoice:
-    return ModelChoice(LLM_PROVIDER, _default_model(LLM_PROVIDER))
+    return ModelChoice("groq", _default_model("groq"))
 
 
 def default_choice() -> ModelChoice:
@@ -121,12 +121,8 @@ def default_choice() -> ModelChoice:
 def model_choices() -> list[ModelChoice]:
     """Models offered in the UI picker: the configured default first, then any with an API key set."""
     candidates = [
-        _env_choice(),
-        ModelChoice("deepseek", _default_model("deepseek")),
-        ModelChoice("ollama", "gpt-oss:120b"),
         ModelChoice("groq", _default_model("groq")),
-        ModelChoice("groq", "openai/gpt-oss-20b"),
-        ModelChoice("custom", _default_model("custom")),
+        ModelChoice("deepseek", _default_model("deepseek")),
     ]
     seen, out = set(), []
     for c in candidates:
