@@ -17,7 +17,7 @@ TAG="${TAG:-$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo latest)-
 
 APP_SA="lc-app"
 MCP_SA="lc-mcp"
-SECRETS=(DATABASE_URL CHAINLIT_AUTH_SECRET OLLAMA_API_KEY GROQ_API_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY)
+SECRETS=(DATABASE_URL CHAINLIT_AUTH_SECRET GROQ_API_KEY DEEPSEEK_API_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY)
 
 [[ -n "$PROJECT_ID" ]] || { echo "No GCP project: set PROJECT_ID or run 'gcloud config set project <id>'"; exit 1; }
 [[ -f "$ENV_FILE" ]] || { echo "Missing $ENV_FILE"; exit 1; }
@@ -37,8 +37,7 @@ if [[ -z "$DB_URL" || "$DB_URL" == *YOUR-DATABASE-PASSWORD* || "$DB_URL" == *loc
   echo "DATABASE_URL in $ENV_FILE is missing, still has the placeholder password, or points at localhost."; exit 1
 fi
 [[ -n "$(env_val CHAINLIT_AUTH_SECRET)" ]] || { echo "CHAINLIT_AUTH_SECRET is empty (openssl rand -hex 32)"; exit 1; }
-[[ "$(env_val OLLAMA_BASE_URL)" != *localhost* ]] || { echo "OLLAMA_BASE_URL points at localhost; use https://ollama.com"; exit 1; }
-[[ -n "$(env_val OLLAMA_API_KEY)" ]] || { echo "OLLAMA_API_KEY is empty (https://ollama.com/settings/keys)"; exit 1; }
+[[ -n "$(env_val GROQ_API_KEY)" || -n "$(env_val DEEPSEEK_API_KEY)" ]] || { echo "Set GROQ_API_KEY and/or DEEPSEEK_API_KEY in $ENV_FILE"; exit 1; }
 
 IMAGE_PREFIX="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO"
 gc() { gcloud --project "$PROJECT_ID" --quiet "$@"; }
@@ -106,7 +105,7 @@ step "Deploying app (public)"
 ENV_PAIRS=()
 # Adds KEY=VALUE, skipping empty values so the app's own defaults apply.
 add_env() { [[ -n "$2" ]] && ENV_PAIRS+=("$1=$2") || true; }
-for key in LLM_PROVIDER FALLBACK_LLM_PROVIDER OLLAMA_BASE_URL OLLAMA_MODEL GROQ_MODEL LANGFUSE_BASE_URL; do
+for key in LLM_PROVIDER FALLBACK_LLM_PROVIDER OLLAMA_BASE_URL OLLAMA_MODEL GROQ_MODEL DEEPSEEK_BASE_URL DEEPSEEK_MODEL LANGFUSE_BASE_URL; do
   add_env "$key" "$(env_val "$key")"
 done
 add_env DAILY_GOAL_LIMIT "${DAILY_GOAL_LIMIT:-$(env_val DAILY_GOAL_LIMIT)}"

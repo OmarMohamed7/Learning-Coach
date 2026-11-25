@@ -1,5 +1,5 @@
 # Single container for Render's free tier: Chainlit app + both MCP servers (one process, localhost only).
-# Build context is the repo root. Secrets (DATABASE_URL, OLLAMA_API_KEY, GROQ_API_KEY, CHAINLIT_AUTH_SECRET,
+# Build context is the repo root. Secrets (DATABASE_URL, GROQ_API_KEY, DEEPSEEK_API_KEY, CHAINLIT_AUTH_SECRET,
 # LANGFUSE_*) are set in the Render dashboard, never here.
 FROM python:3.12-slim
 
@@ -19,7 +19,9 @@ COPY mcp_servers mcp_servers
 COPY deploy/render/start.sh /app/start.sh
 
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH="/app/learning_coach" \
-    LLM_PROVIDER=ollama OLLAMA_BASE_URL=https://ollama.com OLLAMA_MODEL=gpt-oss:120b FALLBACK_LLM_PROVIDER=groq \
+    LLM_PROVIDER=groq GROQ_MODEL=openai/gpt-oss-120b FALLBACK_LLM_PROVIDER=deepseek \
+    DEEPSEEK_BASE_URL=https://api.deepseek.com DEEPSEEK_MODEL=deepseek-chat \
+    OLLAMA_BASE_URL=https://ollama.com OLLAMA_MODEL=gpt-oss:120b \
     MCP_FILESYSTEM_URL=http://127.0.0.1:8001/mcp MCP_MEMORY_URL=http://127.0.0.1:8002/mcp \
     NOTES_PATH=study_materials/sample_notes CHECKPOINT_DB=data/checkpoints.db \
     USE_A2A_QUIZ=false USE_STUDY_BUDDY=false QUIZ_SERVICE_URL=http://unused:9001 STUDY_BUDDY_URL=http://unused:9002 \
